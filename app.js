@@ -132,6 +132,7 @@ async function login(){
   try{
     await ensureCloudTenant();
     await loadCloudContext();
+    await loadCloudWorkers();
   }catch(e){
     console.error(e); status.textContent='Signed in, but Safe Site could not load your company yet.'; return;
   }
@@ -155,6 +156,7 @@ async function createAccount(){
   cloudUser=data.user;
   await ensureCloudTenant();
   await loadCloudContext();
+  await loadCloudWorkers();
   openAuthenticatedApp();
 }
 
@@ -201,6 +203,26 @@ async function loadCloudContext(){
   persist();
 }
 
+async function loadCloudWorkers(){
+  if(!cloudOrganizationId) return;
+  const client=initSupabase();
+  const {data:workers,error}=await client.from('workers')
+    .select('id,site_id,employee_number,first_name,last_name,job_title,status,ready_for_work,qualifications(id,name,code,category,issued_on,expires_on,status)')
+    .eq('organization_id',cloudOrganizationId).order('created_at');
+  if(error) throw error;
+  const siteNames=Object.fromEntries(Object.entries(cloudSiteIds).map(([name,id])=>[id,name]));
+  db.workers=(workers||[]).map(w=>({
+    id:w.id,
+    name:[w.first_name,w.last_name].filter(Boolean).join(' '),
+    role:w.job_title||'Worker',
+    employeeId:w.employee_number||'',
+    site:siteNames[w.site_id]||db.settings.site,
+    docs:[],
+    quals:(w.qualifications||[]).map(q=>({id:q.id,name:q.name,issued:q.issued_on||'',expires:q.expires_on||''}))
+  }));
+  persist();
+}
+
 function openAuthenticatedApp(){
   installRiskAssessmentUI();
   header.classList.remove('hidden'); nav.classList.remove('hidden'); document.getElementById('login').classList.add('hidden');
@@ -221,7 +243,7 @@ async function restoreSession(){
   const {data:{session}}=await client.auth.getSession();
   if(session?.user){
     cloudUser=session.user;
-    try{ await ensureCloudTenant(); await loadCloudContext(); openAuthenticatedApp(); }
+    try{ await ensureCloudTenant(); await loadCloudContext(); await loadCloudWorkers(); openAuthenticatedApp(); }
     catch(e){ console.error('Session restore failed',e); }
   }
 }
@@ -334,11 +356,20 @@ function prepWorkerEditor(){
   workerEditorTitle.textContent='Add Worker'; workerName.value='';workerRole.value='';workerId.value='';
   workerSite.innerHTML=db.sites.map(s=>`<option ${s===db.settings.site?'selected':''}>${s}</option>`).join('');
 }
-function saveWorker(){
+async function saveWorker(){
   if(!workerName.value.trim()||!workerRole.value.trim()||!workerId.value.trim()){toast('Name, role and employee ID are required');return}
-  const id=Math.max(0,...db.workers.map(w=>w.id||0))+1;
-  db.workers.push({id,name:workerName.value.trim(),role:workerRole.value.trim(),employeeId:workerId.value.trim(),site:workerSite.value,quals:[],docs:[]});
-  logAudit('created','worker',workerName.value.trim()); saveAndQueue('worker',db.workers.at(-1)); toast('Worker saved'); show('workers');
+  if(!cloudUser||!cloudOrganizationId){toast('Cloud connection required');return}
+  const parts=workerName.value.trim().split(/\s+/); const firstName=parts.shift(); const lastName=parts.join(' ')||'-';
+  const siteId=cloudSiteIds[workerSite.value]||null;
+  const {data,error}=await initSupabase().from('workers').insert({
+    organization_id:cloudOrganizationId,site_id:siteId,employee_number:workerId.value.trim(),
+    first_name:firstName,last_name:lastName,job_title:workerRole.value.trim(),status:'active'
+  }).select('id').single();
+  if(error){toast(error.message.includes('duplicate')?'Employee ID already exists':'Could not save worker');console.error(error);return}
+  logAudit('created','worker',workerName.value.trim());
+  await loadCloudWorkers();
+  currentWorkerId=data.id;
+  toast('Worker saved to cloud');show('workers');
 }
 function renderWorkerDetail(){
   const w=db.workers.find(x=>x.id===currentWorkerId); if(!w){show('workers');return}
@@ -349,11 +380,18 @@ function renderWorkerDetail(){
   }).join('')||'<div class="muted">No qualifications added.</div>';
   workerDocs.innerHTML=(w.docs||[]).map(d=>`<div class="item"><b>${d.name}</b><div class="small muted">${d.type||'Document'} · added ${new Date(d.added).toLocaleDateString()}</div></div>`).join('')||'<div class="muted">No documents attached.</div>';
 }
-function saveQualification(){
+async function saveQualification(){
   const w=db.workers.find(x=>x.id===currentWorkerId); if(!w)return;
   if(!qualName.value.trim()){toast('Qualification name is required');return}
-  w.quals.push({name:qualName.value.trim(),issued:qualIssued.value,expires:qualExpiry.value});
-  logAudit('created','qualification',`${w.name}: ${qualName.value.trim()}`); saveAndQueue('qualification',w.quals.at(-1)); toast('Qualification saved'); show('workerDetail');
+  if(!cloudUser||!cloudOrganizationId){toast('Cloud connection required');return}
+  const {error}=await initSupabase().from('qualifications').insert({
+    organization_id:cloudOrganizationId,worker_id:w.id,name:qualName.value.trim(),
+    issued_on:qualIssued.value||null,expires_on:qualExpiry.value||null,status:'valid'
+  });
+  if(error){toast('Could not save qualification');console.error(error);return}
+  logAudit('created','qualification',`${w.name}: ${qualName.value.trim()}`);
+  await loadCloudWorkers();
+  toast('Qualification saved to cloud');show('workerDetail');
 }
 function attachWorkerDocument(){
   const f=workerDocInput.files[0],w=db.workers.find(x=>x.id===currentWorkerId); if(!f||!w)return;
