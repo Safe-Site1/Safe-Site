@@ -48,6 +48,48 @@ let currentWorkerId = null;
 let editingTaskId = null;
 let reportTab = 'records';
 
+function installRiskAssessmentUI(){
+  if(!document.getElementById('riskAssessment')){
+    const quick=document.querySelector('#dashboard .quick');
+    if(quick && !quick.querySelector('[data-risk-assessment]')){
+      const btn=document.createElement('button');
+      btn.setAttribute('data-risk-assessment','true');
+      btn.innerHTML='⚠️ Pre-Task Risk Assessment';
+      btn.onclick=()=>show('riskAssessment');
+      const flraBtn=[...quick.querySelectorAll('button')].find(b=>b.textContent.includes('FLRA'));
+      if(flraBtn) flraBtn.insertAdjacentElement('afterend',btn); else quick.prepend(btn);
+    }
+    const preshift=document.getElementById('preshift');
+    if(preshift){
+      const section=document.createElement('section');
+      section.id='riskAssessment'; section.className='screen hidden';
+      section.innerHTML=`
+        <div class="back" onclick="show('dashboard')">‹ Back</div>
+        <h1>Pre-Task Risk Assessment</h1>
+        <p class="muted">Identify the hazards, rate the initial risk, apply controls, then confirm the residual risk before work starts.</p>
+        <div class="notice small">Uses a demo 5×5 risk matrix. Company/site risk criteria should be configured to match your approved procedure before real-world use.</div>
+        <div class="card">
+          <label>Task<select id="praTask" onchange="loadRiskTaskTemplate()"></select></label>
+          <label>Work Area<input id="praArea" value="Level 420 – East Drift"></label>
+          <label>Hazards<textarea id="praHazards"></textarea></label>
+          <div class="section">Initial Risk</div>
+          <label>Likelihood<select id="praInitialLikelihood" onchange="updateRiskScores()"><option value="1">1 - Rare</option><option value="2">2 - Unlikely</option><option value="3" selected>3 - Possible</option><option value="4">4 - Likely</option><option value="5">5 - Almost Certain</option></select></label>
+          <label>Severity<select id="praInitialSeverity" onchange="updateRiskScores()"><option value="1">1 - Minor</option><option value="2">2 - Moderate</option><option value="3">3 - Serious</option><option value="4" selected>4 - Major</option><option value="5">5 - Catastrophic</option></select></label>
+          <div id="praInitialResult" class="notice"></div>
+          <label>Controls<textarea id="praControls"></textarea></label>
+          <div class="section">Residual Risk After Controls</div>
+          <label>Likelihood<select id="praResidualLikelihood" onchange="updateRiskScores()"><option value="1">1 - Rare</option><option value="2" selected>2 - Unlikely</option><option value="3">3 - Possible</option><option value="4">4 - Likely</option><option value="5">5 - Almost Certain</option></select></label>
+          <label>Severity<select id="praResidualSeverity" onchange="updateRiskScores()"><option value="1">1 - Minor</option><option value="2">2 - Moderate</option><option value="3" selected>3 - Serious</option><option value="4">4 - Major</option><option value="5">5 - Catastrophic</option></select></label>
+          <div id="praResidualResult" class="notice"></div>
+          <label>Supervisor Sign-off<input id="praSupervisor" value="Demo Supervisor"></label>
+          <label>Crew Acknowledgement<input id="praCrew" placeholder="John Smith, Sarah Johnson"></label>
+          <button class="btn" onclick="submitRiskAssessment()">Submit Pre-Task Risk Assessment</button>
+        </div>`;
+      preshift.insertAdjacentElement('beforebegin',section);
+    }
+  }
+}
+
 function deepCopy(o){ return JSON.parse(JSON.stringify(o)); }
 function load(){
   const raw=localStorage.getItem('safeSiteRC');
@@ -62,6 +104,7 @@ function load(){
 function persist(){ localStorage.setItem('safeSiteRC',JSON.stringify(db)); }
 
 function login(){
+  installRiskAssessmentUI();
   header.classList.remove('hidden'); nav.classList.remove('hidden'); login.classList.add('hidden');
   populateSiteSwitcher(); applyPermissions(); updateConnectivity(); show('dashboard');
 }
@@ -70,7 +113,7 @@ function show(id){
   document.getElementById(id).classList.remove('hidden');
   document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
   const map={dashboard:'n-dashboard',workers:'n-workers',workerEditor:'n-workers',workerDetail:'n-workers',qualificationEditor:'n-workers',
-    taskLibrary:'n-flra',taskEditor:'n-flra',flra:'n-flra',preshift:'n-flra',inspection:'n-flra',incident:'n-flra',
+    taskLibrary:'n-flra',taskEditor:'n-flra',flra:'n-flra',riskAssessment:'n-flra',preshift:'n-flra',inspection:'n-flra',incident:'n-flra',
     reports:'n-reports',actions:'n-reports',admin:'n-admin'};
   if(map[id]) document.getElementById(map[id]).classList.add('active');
   if(id==='dashboard') renderDashboard();
@@ -78,6 +121,7 @@ function show(id){
   if(id==='workerEditor') prepWorkerEditor();
   if(id==='workerDetail') renderWorkerDetail();
   if(id==='flra') prepFLRA();
+  if(id==='riskAssessment') prepRiskAssessment();
   if(id==='preshift') prepPreShift();
   if(id==='taskLibrary') renderTaskLibrary();
   if(id==='actions') renderActions();
@@ -242,6 +286,58 @@ function submitFLRA(){
   const t=db.tasks.find(x=>String(x.id)===String(flraTask.value));
   const rec={id:Math.max(0,...db.records.map(r=>r.id||0))+1,type:'FLRA',title:t?.name||'Custom Task',site:db.settings.site,time:nowISO(),details:{area:flraArea.value,hazards:flraHazards.value,controls:flraControls.value,crew:flraCrew.value}};
   db.records.push(rec);logAudit('submitted','FLRA',rec.title);saveAndQueue('record',rec);toast('FLRA submitted');show('dashboard');
+}
+
+function riskLevel(score){
+  if(score<=4) return 'Low';
+  if(score<=9) return 'Medium';
+  if(score<=16) return 'High';
+  return 'Critical';
+}
+function riskClass(level){
+  if(level==='Low') return 'ok';
+  if(level==='Medium') return 'warn';
+  return 'bad';
+}
+function riskScore(likelihood,severity){ return Number(likelihood)*Number(severity); }
+function updateRiskScores(){
+  const initial=riskScore(praInitialLikelihood.value,praInitialSeverity.value);
+  const residual=riskScore(praResidualLikelihood.value,praResidualSeverity.value);
+  const initialLevel=riskLevel(initial), residualLevel=riskLevel(residual);
+  praInitialResult.innerHTML=`<div class="row"><div class="grow"><b>Initial Risk</b><div class="small muted">Likelihood × Severity = ${initial}</div></div><span class="badge ${riskClass(initialLevel)}">${initialLevel}</span></div>`;
+  praResidualResult.innerHTML=`<div class="row"><div class="grow"><b>Residual Risk</b><div class="small muted">Likelihood × Severity = ${residual}</div></div><span class="badge ${riskClass(residualLevel)}">${residualLevel}</span></div>`;
+}
+function prepRiskAssessment(){
+  praTask.innerHTML=db.tasks.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+  loadRiskTaskTemplate();
+  updateRiskScores();
+}
+function loadRiskTaskTemplate(){
+  const t=db.tasks.find(x=>String(x.id)===String(praTask.value)); if(!t)return;
+  praHazards.value=t.hazards.join('\n');
+  praControls.value=t.controls.join('\n');
+}
+function submitRiskAssessment(){
+  const t=db.tasks.find(x=>String(x.id)===String(praTask.value));
+  if(!praHazards.value.trim()){toast('Add at least one hazard');return}
+  if(!praControls.value.trim()){toast('Add controls before submitting');return}
+  const initialScore=riskScore(praInitialLikelihood.value,praInitialSeverity.value);
+  const residualScore=riskScore(praResidualLikelihood.value,praResidualSeverity.value);
+  const initialLevel=riskLevel(initialScore), residualLevel=riskLevel(residualScore);
+  const rec={id:Math.max(0,...db.records.map(r=>r.id||0))+1,type:'Pre-Task Risk Assessment',title:t?.name||'Custom Task',site:db.settings.site,time:nowISO(),details:{
+    area:praArea.value,hazards:praHazards.value,controls:praControls.value,
+    initialLikelihood:Number(praInitialLikelihood.value),initialSeverity:Number(praInitialSeverity.value),initialScore,initialLevel,
+    residualLikelihood:Number(praResidualLikelihood.value),residualSeverity:Number(praResidualSeverity.value),residualScore,residualLevel,
+    supervisor:praSupervisor.value,crew:praCrew.value
+  }};
+  db.records.push(rec);
+  if(residualScore>=10){
+    db.actions.push({id:Math.max(0,...db.actions.map(a=>a.id||0))+1,description:`Review ${residualLevel} residual risk before work: ${rec.title}`,owner:praSupervisor.value||'Supervisor',site:db.settings.site,due:new Date().toISOString().slice(0,10),status:'open'});
+  }
+  logAudit('submitted','pre-task risk assessment',`${rec.title}: ${initialLevel} → ${residualLevel}`);
+  saveAndQueue('record',rec);
+  toast(residualScore>=10?`${residualLevel} residual risk saved — review required`:'Pre-Task Risk Assessment submitted');
+  show('dashboard');
 }
 function prepPreShift(){
   psTask.innerHTML=db.tasks.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
