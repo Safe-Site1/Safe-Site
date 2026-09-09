@@ -68,6 +68,7 @@ hr{border:0;border-top:1px solid #1f3a46}
     <div class="headerRow">
       <div class="brand"><span class="logo"></span>SAFE SITE</div>
       <div class="grow"></div>
+      <button class="btn ghost" style="width:auto;padding:7px 10px;margin:0" onclick="signOut()">Sign Out</button>
       <span id="syncBadge" class="badge ok">Online</span>
     </div>
     <select id="siteSwitcher" class="siteSelect" onchange="switchSite()"></select>
@@ -77,10 +78,11 @@ hr{border:0;border-top:1px solid #1f3a46}
     <section id="login" class="screen login">
       <div class="center"><span class="logo logoBig"></span><h1>Safe Site</h1><p class="muted">Safety, workforce & compliance</p></div>
       <div class="card">
-        <label>Email<input id="loginEmail" value="admin@safesite.demo"></label>
-        <label>Password<input type="password" value="demo123"></label>
+        <label>Email<input id="loginEmail" type="email" autocomplete="email" placeholder="you@company.com"></label>
+        <label>Password<input id="loginPassword" type="password" autocomplete="current-password" placeholder="At least 8 characters"></label>
         <button class="btn" onclick="login()">Sign In</button>
-        <p class="small muted">Demo credentials are pre-filled.</p>
+        <button class="btn secondary" onclick="createAccount()">Create Safe Site Account</button>
+        <p id="loginStatus" class="small muted">Secure cloud login powered by Supabase.</p>
       </div>
     </section>
 
@@ -100,6 +102,7 @@ hr{border:0;border-top:1px solid #1f3a46}
       <button class="btn" onclick="show('preshift')">▶ START PRE-SHIFT</button>
       <div class="quick">
         <button onclick="show('flra')">🛡️ FLRA</button>
+        <button onclick="show('riskAssessment')">⚠️ Pre-Task Risk Assessment</button>
         <button onclick="show('inspection')">📋 Inspection</button>
         <button onclick="show('workers')">👥 Workers</button>
         <button onclick="show('incident')">⚠️ Incident</button>
@@ -186,6 +189,35 @@ hr{border:0;border-top:1px solid #1f3a46}
         <label>Work Area<input id="flraArea" value="Level 420 – East Drift"></label>
         <label>Crew Acknowledgement<input id="flraCrew" placeholder="John Smith, Sarah Johnson"></label>
         <button class="btn" onclick="submitFLRA()">Submit FLRA</button>
+      </div>
+    </section>
+
+
+    <section id="riskAssessment" class="screen hidden">
+      <div class="back" onclick="show('dashboard')">‹ Back</div>
+      <h1>Pre-Task Risk Assessment</h1>
+      <p class="muted">Identify the hazards, rate the initial risk, apply controls, then confirm the residual risk before work starts.</p>
+      <div class="notice small">Uses a demo 5×5 risk matrix. Company/site risk criteria should be configured to match your approved procedure before real-world use.</div>
+      <div class="card">
+        <label>Task<select id="praTask" onchange="loadRiskTaskTemplate()"></select></label>
+        <label>Work Area<input id="praArea" value="Level 420 – East Drift"></label>
+        <label>Hazards<textarea id="praHazards"></textarea></label>
+
+        <div class="section">Initial Risk</div>
+        <label>Likelihood<select id="praInitialLikelihood" onchange="updateRiskScores()"><option value="1">1 - Rare</option><option value="2">2 - Unlikely</option><option value="3" selected>3 - Possible</option><option value="4">4 - Likely</option><option value="5">5 - Almost Certain</option></select></label>
+        <label>Severity<select id="praInitialSeverity" onchange="updateRiskScores()"><option value="1">1 - Minor</option><option value="2">2 - Moderate</option><option value="3">3 - Serious</option><option value="4" selected>4 - Major</option><option value="5">5 - Catastrophic</option></select></label>
+        <div id="praInitialResult" class="notice"></div>
+
+        <label>Controls<textarea id="praControls"></textarea></label>
+
+        <div class="section">Residual Risk After Controls</div>
+        <label>Likelihood<select id="praResidualLikelihood" onchange="updateRiskScores()"><option value="1">1 - Rare</option><option value="2" selected>2 - Unlikely</option><option value="3">3 - Possible</option><option value="4">4 - Likely</option><option value="5">5 - Almost Certain</option></select></label>
+        <label>Severity<select id="praResidualSeverity" onchange="updateRiskScores()"><option value="1">1 - Minor</option><option value="2">2 - Moderate</option><option value="3" selected>3 - Serious</option><option value="4">4 - Major</option><option value="5">5 - Catastrophic</option></select></label>
+        <div id="praResidualResult" class="notice"></div>
+
+        <label>Supervisor Sign-off<input id="praSupervisor" value="Demo Supervisor"></label>
+        <label>Crew Acknowledgement<input id="praCrew" placeholder="John Smith, Sarah Johnson"></label>
+        <button class="btn" onclick="submitRiskAssessment()">Submit Pre-Task Risk Assessment</button>
       </div>
     </section>
 
@@ -295,6 +327,7 @@ hr{border:0;border-top:1px solid #1f3a46}
 </div>
 <div id="toast" class="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
 </body>
 </html>

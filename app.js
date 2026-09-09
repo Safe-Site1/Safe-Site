@@ -1,6 +1,21 @@
 
 const TODAY = new Date();
 
+const SUPABASE_URL = 'https://dfuelhonvhoqvipwzcpp.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_rov8STHxS842ZUsGKmdkgQ_d3fp5Xsd';
+let supabaseClient = null;
+let cloudUser = null;
+let cloudOrganizationId = null;
+let cloudSiteIds = {};
+
+function initSupabase(){
+  if(window.supabase && !supabaseClient){
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+  }
+  return supabaseClient;
+}
+
+
 const seed = {
   settings:{company:'Safe Site Demo Mining',site:'Timmins Project',role:'Administrator'},
   sites:['Timmins Project','Kirkland Lake Project'],
@@ -103,10 +118,112 @@ function load(){
 }
 function persist(){ localStorage.setItem('safeSiteRC',JSON.stringify(db)); }
 
-function login(){
+async function login(){
+  const client=initSupabase();
+  if(!client){ toast('Cloud service did not load. Refresh and try again.'); return; }
+  const email=document.getElementById('loginEmail').value.trim();
+  const password=document.getElementById('loginPassword').value;
+  const status=document.getElementById('loginStatus');
+  if(!email||!password){ status.textContent='Enter your email and password.'; return; }
+  status.textContent='Signing in…';
+  const {data,error}=await client.auth.signInWithPassword({email,password});
+  if(error){ status.textContent=error.message; return; }
+  cloudUser=data.user;
+  try{
+    await ensureCloudTenant();
+    await loadCloudContext();
+  }catch(e){
+    console.error(e); status.textContent='Signed in, but Safe Site could not load your company yet.'; return;
+  }
+  openAuthenticatedApp();
+}
+
+async function createAccount(){
+  const client=initSupabase();
+  if(!client){ toast('Cloud service did not load. Refresh and try again.'); return; }
+  const email=document.getElementById('loginEmail').value.trim();
+  const password=document.getElementById('loginPassword').value;
+  const status=document.getElementById('loginStatus');
+  if(!email||password.length<8){ status.textContent='Use a valid email and a password of at least 8 characters.'; return; }
+  status.textContent='Creating secure account…';
+  const {data,error}=await client.auth.signUp({email,password});
+  if(error){ status.textContent=error.message; return; }
+  if(!data.session){
+    status.textContent='Account created. Check your email for the confirmation link, then return here and sign in.';
+    return;
+  }
+  cloudUser=data.user;
+  await ensureCloudTenant();
+  await loadCloudContext();
+  openAuthenticatedApp();
+}
+
+async function ensureCloudTenant(){
+  const client=initSupabase();
+  const {data:{user}}=await client.auth.getUser();
+  if(!user) throw new Error('No authenticated user');
+  cloudUser=user;
+  await client.from('profiles').upsert({id:user.id,email:user.email,full_name:user.user_metadata?.full_name||''},{onConflict:'id'});
+  const {data:existing,error:existingError}=await client.from('organization_memberships').select('organization_id,role').eq('user_id',user.id).eq('active',true).limit(1);
+  if(existingError) throw existingError;
+  if(existing && existing.length) return;
+  const orgId=crypto.randomUUID();
+  const siteId=crypto.randomUUID();
+  let r=await client.from('organizations').insert({id:orgId,name:'Safe Site Pilot',slug:'safe-site-pilot-'+user.id.slice(0,8)});
+  if(r.error) throw r.error;
+  r=await client.from('organization_memberships').insert({organization_id:orgId,user_id:user.id,role:'administrator'});
+  if(r.error) throw r.error;
+  r=await client.from('sites').insert({id:siteId,organization_id:orgId,name:'Timmins Project',location:'Ontario, Canada'});
+  if(r.error) throw r.error;
+  r=await client.from('site_memberships').insert({site_id:siteId,user_id:user.id});
+  if(r.error) throw r.error;
+}
+
+async function loadCloudContext(){
+  const client=initSupabase();
+  const {data:{user}}=await client.auth.getUser();
+  if(!user) throw new Error('No session');
+  const {data:m,error:me}=await client.from('organization_memberships').select('organization_id,role').eq('user_id',user.id).eq('active',true).limit(1).single();
+  if(me) throw me;
+  cloudOrganizationId=m.organization_id;
+  const [{data:org,error:oe},{data:sites,error:se}]=await Promise.all([
+    client.from('organizations').select('name').eq('id',cloudOrganizationId).single(),
+    client.from('sites').select('id,name').eq('organization_id',cloudOrganizationId).eq('active',true).order('created_at')
+  ]);
+  if(oe) throw oe; if(se) throw se;
+  db.settings.company=org.name;
+  db.settings.role=pretty(m.role);
+  if(sites?.length){
+    db.sites=sites.map(x=>x.name);
+    cloudSiteIds=Object.fromEntries(sites.map(x=>[x.name,x.id]));
+    if(!db.sites.includes(db.settings.site)) db.settings.site=db.sites[0];
+  }
+  persist();
+}
+
+function openAuthenticatedApp(){
   installRiskAssessmentUI();
-  header.classList.remove('hidden'); nav.classList.remove('hidden'); login.classList.add('hidden');
+  header.classList.remove('hidden'); nav.classList.remove('hidden'); document.getElementById('login').classList.add('hidden');
   populateSiteSwitcher(); applyPermissions(); updateConnectivity(); show('dashboard');
+}
+
+async function signOut(){
+  if(initSupabase()) await supabaseClient.auth.signOut();
+  cloudUser=null; cloudOrganizationId=null; cloudSiteIds={};
+  header.classList.add('hidden'); nav.classList.add('hidden');
+  document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
+  document.getElementById('login').classList.remove('hidden');
+  document.getElementById('loginStatus').textContent='Signed out.';
+}
+
+async function restoreSession(){
+  const client=initSupabase(); if(!client) return;
+  const {data:{session}}=await client.auth.getSession();
+  if(session?.user){
+    cloudUser=session.user;
+    try{ await ensureCloudTenant(); await loadCloudContext(); openAuthenticatedApp(); }
+    catch(e){ console.error('Session restore failed',e); }
+  }
 }
 function show(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
@@ -147,7 +264,7 @@ function saveAndQueue(kind,payload){
 }
 function updateConnectivity(){
   const online=navigator.onLine;
-  syncBadge.textContent=online?'Online':'Offline';
+  syncBadge.textContent=online?(cloudUser?'Cloud':'Online'):'Offline';
   syncBadge.className='badge '+(online?'ok':'warn');
   if(online && db.offlineQueue.length){
     const count=db.offlineQueue.length; db.offlineQueue=[]; persist(); toast(`${count} offline item${count>1?'s':''} synced`);
@@ -429,3 +546,4 @@ function applyPermissions(){
   document.getElementById('n-reports').style.display=worker?'none':'block';
 }
 if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('service-worker.js').catch(()=>{}));}
+window.addEventListener('load',restoreSession);
