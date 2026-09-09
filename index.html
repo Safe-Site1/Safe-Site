@@ -192,7 +192,6 @@ hr{border:0;border-top:1px solid #1f3a46}
       </div>
     </section>
 
-
     <section id="riskAssessment" class="screen hidden">
       <div class="back" onclick="show('dashboard')">‹ Back</div>
       <h1>Pre-Task Risk Assessment</h1>
@@ -202,19 +201,15 @@ hr{border:0;border-top:1px solid #1f3a46}
         <label>Task<select id="praTask" onchange="loadRiskTaskTemplate()"></select></label>
         <label>Work Area<input id="praArea" value="Level 420 – East Drift"></label>
         <label>Hazards<textarea id="praHazards"></textarea></label>
-
         <div class="section">Initial Risk</div>
         <label>Likelihood<select id="praInitialLikelihood" onchange="updateRiskScores()"><option value="1">1 - Rare</option><option value="2">2 - Unlikely</option><option value="3" selected>3 - Possible</option><option value="4">4 - Likely</option><option value="5">5 - Almost Certain</option></select></label>
         <label>Severity<select id="praInitialSeverity" onchange="updateRiskScores()"><option value="1">1 - Minor</option><option value="2">2 - Moderate</option><option value="3">3 - Serious</option><option value="4" selected>4 - Major</option><option value="5">5 - Catastrophic</option></select></label>
         <div id="praInitialResult" class="notice"></div>
-
         <label>Controls<textarea id="praControls"></textarea></label>
-
         <div class="section">Residual Risk After Controls</div>
         <label>Likelihood<select id="praResidualLikelihood" onchange="updateRiskScores()"><option value="1">1 - Rare</option><option value="2" selected>2 - Unlikely</option><option value="3">3 - Possible</option><option value="4">4 - Likely</option><option value="5">5 - Almost Certain</option></select></label>
         <label>Severity<select id="praResidualSeverity" onchange="updateRiskScores()"><option value="1">1 - Minor</option><option value="2">2 - Moderate</option><option value="3" selected>3 - Serious</option><option value="4">4 - Major</option><option value="5">5 - Catastrophic</option></select></label>
         <div id="praResidualResult" class="notice"></div>
-
         <label>Supervisor Sign-off<input id="praSupervisor" value="Demo Supervisor"></label>
         <label>Crew Acknowledgement<input id="praCrew" placeholder="John Smith, Sarah Johnson"></label>
         <button class="btn" onclick="submitRiskAssessment()">Submit Pre-Task Risk Assessment</button>
@@ -293,21 +288,17 @@ hr{border:0;border-top:1px solid #1f3a46}
         <label>Your Role<select id="currentRole"><option>Administrator</option><option>Supervisor</option><option>Safety Coordinator</option><option>Worker</option><option>Client Viewer</option></select></label>
         <button class="btn" onclick="saveAdminSettings()">Save Settings</button>
       </div>
-
       <div class="section">Sites</div>
       <div id="sitesAdmin" class="card"></div>
       <button class="btn secondary" onclick="addSite()">+ Add Site</button>
-
       <div class="section">Users</div>
       <div id="usersAdmin" class="card"></div>
       <button class="btn secondary" onclick="inviteUser()">+ Invite User</button>
-
       <div class="section">Worker Import</div>
       <div class="card">
         <input id="csvInput" type="file" accept=".csv,text/csv" onchange="importWorkersCSV()">
         <div class="small muted">CSV columns: name, role, employee_id, site</div>
       </div>
-
       <div class="section">System</div>
       <div class="card">
         <div class="item row"><div class="grow"><b>Offline storage</b><div class="small muted">Forms save locally if service is lost.</div></div><span class="badge ok">Enabled</span></div>
@@ -329,5 +320,6 @@ hr{border:0;border-top:1px solid #1f3a46}
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
+<script src="pilot-management.js"></script>
 </body>
 </html>
