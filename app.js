@@ -133,6 +133,7 @@ async function login(){
     await ensureCloudTenant();
     await loadCloudContext();
     await loadCloudWorkers();
+    await loadCloudSafetyData();
   }catch(e){
     console.error(e); status.textContent='Signed in, but Safe Site could not load your company yet.'; return;
   }
@@ -157,6 +158,7 @@ async function createAccount(){
   await ensureCloudTenant();
   await loadCloudContext();
   await loadCloudWorkers();
+  await loadCloudSafetyData();
   openAuthenticatedApp();
 }
 
@@ -223,6 +225,99 @@ async function loadCloudWorkers(){
   persist();
 }
 
+function cloudRecordDisplayType(recordType){
+  const map={
+    pre_shift:'Pre-Shift',
+    flra:'FLRA',
+    pre_task_risk_assessment:'Pre-Task Risk Assessment',
+    inspection:'Inspection',
+    incident:'Incident',
+    near_miss:'Near Miss'
+  };
+  return map[recordType]||pretty(recordType);
+}
+
+async function loadCloudSafetyData(){
+  if(!cloudOrganizationId) return;
+  const client=initSupabase();
+  const [{data:records,error:re},{data:actions,error:ae}]=await Promise.all([
+    client.from('safety_records')
+      .select('id,site_id,record_type,title,work_area,task_name,data,status,created_at')
+      .eq('organization_id',cloudOrganizationId)
+      .order('created_at'),
+    client.from('corrective_actions')
+      .select('id,site_id,safety_record_id,title,description,priority,status,due_date,created_at,closed_at')
+      .eq('organization_id',cloudOrganizationId)
+      .order('created_at')
+  ]);
+  if(re) throw re;
+  if(ae) throw ae;
+  const siteNames=Object.fromEntries(Object.entries(cloudSiteIds).map(([name,id])=>[id,name]));
+  db.records=(records||[]).map(r=>({
+    id:r.id,
+    type:cloudRecordDisplayType(r.record_type),
+    title:r.title||r.task_name||cloudRecordDisplayType(r.record_type),
+    site:siteNames[r.site_id]||db.settings.site,
+    time:r.created_at,
+    details:{...(r.data||{}),area:r.work_area||(r.data||{}).area||''},
+    cloudStatus:r.status
+  }));
+  db.actions=(actions||[]).map(a=>({
+    id:a.id,
+    description:a.title||a.description||'Corrective action',
+    owner:'Supervisor',
+    site:siteNames[a.site_id]||db.settings.site,
+    due:a.due_date||'',
+    status:a.status,
+    priority:a.priority,
+    safetyRecordId:a.safety_record_id
+  }));
+  persist();
+}
+
+function currentCloudSiteId(){
+  return cloudSiteIds[db.settings.site]||null;
+}
+
+async function saveCloudSafetyRecord(recordType,title,workArea,taskName,data,status='submitted'){
+  const client=initSupabase();
+  const siteId=currentCloudSiteId();
+  if(!client||!cloudOrganizationId||!siteId) throw new Error('Cloud site is not ready');
+  const payload={
+    organization_id:cloudOrganizationId,
+    site_id:siteId,
+    created_by:cloudUser?.id||null,
+    record_type:recordType,
+    title:title||null,
+    work_area:workArea||null,
+    task_name:taskName||null,
+    data:data||{},
+    status
+  };
+  const {data:row,error}=await client.from('safety_records').insert(payload)
+    .select('id,site_id,record_type,title,work_area,task_name,data,status,created_at').single();
+  if(error) throw error;
+  return row;
+}
+
+async function saveCloudCorrectiveAction({title,description='',priority='medium',dueDate=null,safetyRecordId=null}){
+  const client=initSupabase();
+  const siteId=currentCloudSiteId();
+  if(!client||!cloudOrganizationId||!siteId) throw new Error('Cloud site is not ready');
+  const {data:row,error}=await client.from('corrective_actions').insert({
+    organization_id:cloudOrganizationId,
+    site_id:siteId,
+    safety_record_id:safetyRecordId,
+    title,
+    description,
+    priority,
+    status:'open',
+    due_date:dueDate
+  }).select('id,site_id,safety_record_id,title,description,priority,status,due_date,created_at').single();
+  if(error) throw error;
+  return row;
+}
+
 function openAuthenticatedApp(){
   installRiskAssessmentUI();
   header.classList.remove('hidden'); nav.classList.remove('hidden'); document.getElementById('login').classList.add('hidden');
@@ -243,7 +338,7 @@ async function restoreSession(){
   const {data:{session}}=await client.auth.getSession();
   if(session?.user){
     cloudUser=session.user;
-    try{ await ensureCloudTenant(); await loadCloudContext(); await loadCloudWorkers(); openAuthenticatedApp(); }
+    try{ await ensureCloudTenant(); await loadCloudContext(); await loadCloudWorkers(); await loadCloudSafetyData(); openAuthenticatedApp(); }
     catch(e){ console.error('Session restore failed',e); }
   }
 }
@@ -437,10 +532,18 @@ function deleteTask(){
   if(editingTaskId===null)return;if(!confirm('Delete this task template?'))return;
   const t=db.tasks.find(x=>x.id===editingTaskId);db.tasks=db.tasks.filter(x=>x.id!==editingTaskId);logAudit('deleted','task template',t?.name||'');persist();toast('Task deleted');show('taskLibrary');
 }
-function submitFLRA(){
+async function submitFLRA(){
   const t=db.tasks.find(x=>String(x.id)===String(flraTask.value));
-  const rec={id:Math.max(0,...db.records.map(r=>r.id||0))+1,type:'FLRA',title:t?.name||'Custom Task',site:db.settings.site,time:nowISO(),details:{area:flraArea.value,hazards:flraHazards.value,controls:flraControls.value,crew:flraCrew.value}};
-  db.records.push(rec);logAudit('submitted','FLRA',rec.title);saveAndQueue('record',rec);toast('FLRA submitted');show('dashboard');
+  const details={area:flraArea.value,hazards:flraHazards.value,controls:flraControls.value,crew:flraCrew.value};
+  try{
+    const row=await saveCloudSafetyRecord('flra',t?.name||'Custom Task',flraArea.value,t?.name||'Custom Task',details);
+    await loadCloudSafetyData();
+    logAudit('submitted','FLRA',t?.name||'Custom Task');
+    toast('FLRA saved to cloud');
+    show('dashboard');
+  }catch(e){
+    console.error(e); toast('FLRA could not save to cloud');
+  }
 }
 
 function riskLevel(score){
@@ -472,61 +575,120 @@ function loadRiskTaskTemplate(){
   praHazards.value=t.hazards.join('\n');
   praControls.value=t.controls.join('\n');
 }
-function submitRiskAssessment(){
+async function submitRiskAssessment(){
   const t=db.tasks.find(x=>String(x.id)===String(praTask.value));
   if(!praHazards.value.trim()){toast('Add at least one hazard');return}
   if(!praControls.value.trim()){toast('Add controls before submitting');return}
   const initialScore=riskScore(praInitialLikelihood.value,praInitialSeverity.value);
   const residualScore=riskScore(praResidualLikelihood.value,praResidualSeverity.value);
   const initialLevel=riskLevel(initialScore), residualLevel=riskLevel(residualScore);
-  const rec={id:Math.max(0,...db.records.map(r=>r.id||0))+1,type:'Pre-Task Risk Assessment',title:t?.name||'Custom Task',site:db.settings.site,time:nowISO(),details:{
+  const title=t?.name||'Custom Task';
+  const details={
     area:praArea.value,hazards:praHazards.value,controls:praControls.value,
     initialLikelihood:Number(praInitialLikelihood.value),initialSeverity:Number(praInitialSeverity.value),initialScore,initialLevel,
     residualLikelihood:Number(praResidualLikelihood.value),residualSeverity:Number(praResidualSeverity.value),residualScore,residualLevel,
     supervisor:praSupervisor.value,crew:praCrew.value
-  }};
-  db.records.push(rec);
-  if(residualScore>=10){
-    db.actions.push({id:Math.max(0,...db.actions.map(a=>a.id||0))+1,description:`Review ${residualLevel} residual risk before work: ${rec.title}`,owner:praSupervisor.value||'Supervisor',site:db.settings.site,due:new Date().toISOString().slice(0,10),status:'open'});
+  };
+  try{
+    const row=await saveCloudSafetyRecord('pre_task_risk_assessment',title,praArea.value,title,details);
+    if(residualScore>=10){
+      await saveCloudCorrectiveAction({
+        title:`Review ${residualLevel} residual risk before work: ${title}`,
+        description:`Pre-Task Risk Assessment residual score ${residualScore}. Supervisor: ${praSupervisor.value||'Not entered'}.`,
+        priority:residualLevel==='Critical'?'critical':'high',
+        dueDate:new Date().toISOString().slice(0,10),
+        safetyRecordId:row.id
+      });
+    }
+    await loadCloudSafetyData();
+    logAudit('submitted','pre-task risk assessment',`${title}: ${initialLevel} → ${residualLevel}`);
+    toast(residualScore>=10?`${residualLevel} residual risk saved to cloud — review required`:'Pre-Task Risk Assessment saved to cloud');
+    show('dashboard');
+  }catch(e){
+    console.error(e); toast('Risk assessment could not save to cloud');
   }
-  logAudit('submitted','pre-task risk assessment',`${rec.title}: ${initialLevel} → ${residualLevel}`);
-  saveAndQueue('record',rec);
-  toast(residualScore>=10?`${residualLevel} residual risk saved — review required`:'Pre-Task Risk Assessment submitted');
-  show('dashboard');
 }
 function prepPreShift(){
   psTask.innerHTML=db.tasks.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
   const t=db.tasks[0]; if(t){psHazards.value=t.hazards.join('\n');psControls.value=t.controls.join('\n')}
   psTask.onchange=()=>{const x=db.tasks.find(t=>String(t.id)===String(psTask.value));if(x){psHazards.value=x.hazards.join('\n');psControls.value=x.controls.join('\n')}};
 }
-function submitPreShift(){
+async function submitPreShift(){
   const t=db.tasks.find(x=>String(x.id)===String(psTask.value));
-  const rec={id:Math.max(0,...db.records.map(r=>r.id||0))+1,type:'Pre-Shift',title:t?.name||'Task',site:db.settings.site,time:nowISO(),details:{crew:psCrew.value,area:psArea.value,hazards:psHazards.value,controls:psControls.value,supervisor:psSupervisor.value}};
-  db.records.push(rec);logAudit('submitted','pre-shift',rec.title);saveAndQueue('record',rec);toast('Pre-shift submitted');show('dashboard');
-}
-function submitInspection(){
-  const rec={id:Math.max(0,...db.records.map(r=>r.id||0))+1,type:'Inspection',title:inspEquip.value,site:db.settings.site,time:nowISO(),details:{condition:inspCond.value,notes:inspNotes.value,photo:inspPhoto.files[0]?.name||null}};
-  db.records.push(rec);
-  if(inspCond.value!=='Pass'){
-    db.actions.push({id:Math.max(0,...db.actions.map(a=>a.id||0))+1,description:`Inspection deficiency: ${inspEquip.value}`,owner:'Supervisor',site:db.settings.site,due:new Date(Date.now()+7*86400000).toISOString().slice(0,10),status:'open'});
+  const title=t?.name||'Task';
+  const details={crew:psCrew.value,area:psArea.value,hazards:psHazards.value,controls:psControls.value,supervisor:psSupervisor.value};
+  try{
+    await saveCloudSafetyRecord('pre_shift',title,psArea.value,title,details);
+    await loadCloudSafetyData();
+    logAudit('submitted','pre-shift',title);
+    toast('Pre-shift saved to cloud');
+    show('dashboard');
+  }catch(e){
+    console.error(e); toast('Pre-shift could not save to cloud');
   }
-  logAudit('submitted','inspection',inspEquip.value);saveAndQueue('record',rec);toast('Inspection submitted');show('dashboard');
 }
-function submitIncident(){
-  const rec={id:Math.max(0,...db.records.map(r=>r.id||0))+1,type:incType.value,title:incLocation.value||incType.value,site:db.settings.site,time:nowISO(),details:{description:incDesc.value,immediateAction:incAction.value,people:incPeople.value,photo:incPhoto.files[0]?.name||null}};
-  db.records.push(rec);logAudit('submitted',incType.value,rec.title);saveAndQueue('record',rec);toast('Report submitted');show('dashboard');
+async function submitInspection(){
+  const details={condition:inspCond.value,notes:inspNotes.value,photo:inspPhoto.files[0]?.name||null};
+  try{
+    const row=await saveCloudSafetyRecord('inspection',inspEquip.value,'',inspEquip.value,details);
+    if(inspCond.value!=='Pass'){
+      await saveCloudCorrectiveAction({
+        title:`Inspection deficiency: ${inspEquip.value}`,
+        description:inspNotes.value||inspCond.value,
+        priority:inspCond.value==='Out of Service'?'critical':'high',
+        dueDate:new Date(Date.now()+7*86400000).toISOString().slice(0,10),
+        safetyRecordId:row.id
+      });
+    }
+    await loadCloudSafetyData();
+    logAudit('submitted','inspection',inspEquip.value);
+    toast(inspCond.value==='Pass'?'Inspection saved to cloud':'Inspection and corrective action saved to cloud');
+    show('dashboard');
+  }catch(e){
+    console.error(e); toast('Inspection could not save to cloud');
+  }
+}
+async function submitIncident(){
+  const displayType=incType.value;
+  const recordType=displayType==='Near Miss'?'near_miss':'incident';
+  const title=incLocation.value||displayType;
+  const details={description:incDesc.value,immediateAction:incAction.value,people:incPeople.value,photo:incPhoto.files[0]?.name||null};
+  try{
+    await saveCloudSafetyRecord(recordType,title,incLocation.value,'',details);
+    await loadCloudSafetyData();
+    logAudit('submitted',displayType,title);
+    toast(`${displayType} saved to cloud`);
+    show('dashboard');
+  }catch(e){
+    console.error(e); toast(`${displayType} could not save to cloud`);
+  }
 }
 
 function renderActions(){
-  actionsList.innerHTML=db.actions.filter(a=>a.site===db.settings.site).map(a=>`<div class="card"><div class="row"><div class="grow"><b>${a.description}</b><div class="small muted">${a.owner} · Due ${a.due}</div></div>${badge(a.status)}</div><div class="quick" style="margin-top:10px"><button onclick="setAction(${a.id},'in_progress')">Start</button><button onclick="setAction(${a.id},'closed')">Close</button></div></div>`).join('')||'<div class="card muted">No corrective actions.</div>';
+  actionsList.innerHTML=db.actions.filter(a=>a.site===db.settings.site).map(a=>`<div class="card"><div class="row"><div class="grow"><b>${a.description}</b><div class="small muted">${a.owner} · Due ${a.due}</div></div>${badge(a.status)}</div><div class="quick" style="margin-top:10px"><button onclick="setAction('${a.id}','in_progress')">Start</button><button onclick="setAction('${a.id}','closed')">Close</button></div></div>`).join('')||'<div class="card muted">No corrective actions.</div>';
 }
-function addAction(){
-  const d=prompt('Corrective action');if(!d)return;const owner=prompt('Owner','Supervisor')||'Supervisor';
-  const due=prompt('Due date (YYYY-MM-DD)',new Date(Date.now()+7*86400000).toISOString().slice(0,10))||'';
-  const a={id:Math.max(0,...db.actions.map(a=>a.id||0))+1,description:d,owner,site:db.settings.site,due,status:'open'};
-  db.actions.push(a);logAudit('created','corrective action',d);saveAndQueue('action',a);renderActions();toast('Action added');
+async function addAction(){
+  const d=prompt('Corrective action');if(!d)return;
+  const owner=prompt('Owner','Supervisor')||'Supervisor';
+  const due=prompt('Due date (YYYY-MM-DD)',new Date(Date.now()+7*86400000).toISOString().slice(0,10))||null;
+  try{
+    await saveCloudCorrectiveAction({title:d,description:`Owner: ${owner}`,priority:'medium',dueDate:due});
+    await loadCloudSafetyData();
+    logAudit('created','corrective action',d);
+    renderActions();toast('Corrective action saved to cloud');
+  }catch(e){console.error(e);toast('Corrective action could not save to cloud')}
 }
-function setAction(id,status){const a=db.actions.find(x=>x.id===id);if(!a)return;a.status=status;logAudit('updated','corrective action',`${a.description}: ${status}`);saveAndQueue('action',a);renderActions();}
+async function setAction(id,status){
+  const a=db.actions.find(x=>String(x.id)===String(id));if(!a)return;
+  const client=initSupabase();
+  const patch={status};
+  if(status==='closed') patch.closed_at=nowISO();
+  const {error}=await client.from('corrective_actions').update(patch).eq('id',id).eq('organization_id',cloudOrganizationId);
+  if(error){console.error(error);toast('Action could not update');return}
+  await loadCloudSafetyData();
+  logAudit('updated','corrective action',`${a.description}: ${status}`);
+  renderActions();toast('Corrective action updated in cloud');
+}
 
 function setReportTab(tab,btn){
   reportTab=tab;document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderReports();
