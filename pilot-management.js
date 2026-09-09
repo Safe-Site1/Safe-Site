@@ -359,42 +359,45 @@
     return baseShow(id);
   };
 
-  // Pilot polish: preserve inspection Work Area / Location in the local view and cloud record.
-  const baseSubmitInspection = window.submitInspection;
+  // Pilot polish rebuild: inspection Work Area / Location is saved directly to cloud.
   window.submitInspection = async function(){
     const area = (document.getElementById('inspArea')?.value || '').trim();
-    const beforeIds = new Set((db.records||[]).map(r=>String(r.id)));
-    await baseSubmitInspection();
-    const created = (db.records||[]).find(r=>!beforeIds.has(String(r.id)) && r.type === 'Inspection');
-    if(created && area){
-      created.details = created.details || {};
-      created.details.area = area;
-      created.details.workArea = area;
-      persist();
-    }
-    // The base cloud save already stores the inspection. Update the newest matching
-    // cloud record so Reports and future sessions retain the work area.
+    const details = {
+      area,
+      workArea: area,
+      condition: inspCond.value,
+      notes: inspNotes.value,
+      photo: inspPhoto.files[0]?.name || null
+    };
     try{
-      if(area && typeof getSupabaseClient === 'function' && cloudOrganizationId){
-        const client = getSupabaseClient();
-        let q = client.from('safety_records')
-          .select('id,data')
-          .eq('organization_id',cloudOrganizationId)
-          .eq('record_type','inspection')
-          .order('created_at',{ascending:false})
-          .limit(1);
-        if(cloudSiteId) q = q.eq('site_id',cloudSiteId);
-        const {data: rows, error} = await q;
-        if(!error && rows && rows[0]){
-          const oldData = rows[0].data || {};
-          await client.from('safety_records').update({
-            work_area: area,
-            data: {...oldData, area: area, workArea: area}
-          }).eq('id',rows[0].id);
-          if(created) created.details = {...created.details, area, workArea:area};
-        }
+      const row = await saveCloudSafetyRecord(
+        'inspection',
+        inspEquip.value,
+        area,
+        inspEquip.value,
+        details
+      );
+
+      if(inspCond.value !== 'Pass'){
+        await saveCloudCorrectiveAction({
+          title:`Inspection deficiency: ${inspEquip.value}`,
+          description:inspNotes.value || inspCond.value,
+          priority:inspCond.value === 'Out of Service' ? 'critical' : 'high',
+          dueDate:new Date(Date.now()+7*86400000).toISOString().slice(0,10),
+          safetyRecordId:row.id
+        });
       }
-    }catch(e){ console.warn('Inspection work area cloud update skipped',e); }
+
+      await loadCloudSafetyData();
+      logAudit('submitted','inspection',inspEquip.value);
+      toast(inspCond.value === 'Pass'
+        ? 'Inspection saved to cloud'
+        : 'Inspection and corrective action saved to cloud');
+      show('dashboard');
+    }catch(e){
+      console.error(e);
+      toast('Inspection could not save to cloud');
+    }
   };
 
   ensurePilotUI();
