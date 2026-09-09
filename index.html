@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07131a">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Safe Site</title>
+<style>
+:root{
+  --bg:#07131a;--panel:#0d1f29;--panel2:#112a36;--line:#264653;
+  --text:#f7f9fa;--muted:#9cb0ba;--orange:#ff6a1a;--green:#2ac463;
+  --yellow:#f7b928;--red:#ef4b4b;--blue:#4ca3ff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:#0c1116;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--text)}
+button,input,select,textarea{font:inherit}
+.app{max-width:460px;min-height:100vh;margin:auto;background:linear-gradient(#07131a,#091820);position:relative}
+.header{position:sticky;top:0;z-index:20;padding:14px 16px 10px;background:rgba(7,19,26,.97);border-bottom:1px solid #17313d}
+.brand{display:flex;align-items:center;gap:10px;font-weight:900;letter-spacing:.8px}
+.logo{width:30px;height:24px;position:relative;display:inline-block}
+.logo:before,.logo:after{content:"";position:absolute;bottom:0;width:14px;height:24px;background:var(--orange);clip-path:polygon(50% 0,100% 100%,70% 100%,50% 55%,30% 100%,0 100%)}
+.logo:after{left:12px}
+.headerRow{display:flex;align-items:center;gap:10px}
+.headerRow .grow{flex:1}
+.siteSelect{margin:8px 0 0 40px;width:calc(100% - 40px);padding:8px 10px;background:#102733;color:white;border:1px solid #315564;border-radius:10px}
+main{padding:18px 16px 100px}
+h1{font-size:26px;margin:0 0 4px} h2{margin:0 0 12px} h3{margin:0 0 8px}
+p{margin-top:0}.muted{color:var(--muted)}.small{font-size:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.stat b{font-size:24px;display:block}
+.btn{width:100%;border:0;border-radius:12px;padding:14px 16px;font-weight:800;font-size:15px;background:var(--orange);color:#fff;margin:8px 0;cursor:pointer}
+.btn.secondary{background:#153440;border:1px solid #315564}
+.btn.ghost{background:transparent;border:1px solid #315564}
+.btn.danger{background:#5a2020;border:1px solid #8d3434}
+.row{display:flex;align-items:center;gap:10px}.grow{flex:1}
+.badge{font-size:11px;font-weight:900;padding:5px 8px;border-radius:999px;white-space:nowrap}
+.ok{background:rgba(42,196,99,.15);color:#7cf0a3}.warn{background:rgba(247,185,40,.15);color:#ffd76e}.bad{background:rgba(239,75,75,.15);color:#ff9292}.info{background:rgba(76,163,255,.15);color:#87bdff}
+.avatar{width:46px;height:46px;border-radius:10px;background:#17333f;display:grid;place-items:center;font-size:22px}
+input,select,textarea{width:100%;background:#102733;color:#fff;border:1px solid #315564;border-radius:10px;padding:12px;margin:6px 0 12px}
+textarea{min-height:92px} label{font-size:12px;font-weight:800;color:#cfdae0}
+.section{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:#cbd8de;font-weight:900;margin:16px 0 8px}
+.item{padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05)}.item:last-child{border-bottom:0}
+.check{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:var(--green);font-weight:900;font-size:12px}.check.warn{background:var(--yellow);color:#111}
+.topline{display:flex;align-items:center;justify-content:space-between;gap:12px}.back{cursor:pointer;color:var(--muted);font-weight:800;margin-bottom:12px}
+.nav{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:min(460px,100%);display:grid;grid-template-columns:repeat(5,1fr);background:#0a1820;border-top:1px solid #29444f;padding:8px 4px calc(8px + env(safe-area-inset-bottom));z-index:30}
+.nav button{background:none;border:0;color:#8fa5af;font-size:11px;font-weight:700;cursor:pointer}.nav .active{color:var(--orange)}.nav span{display:block;font-size:18px;margin-bottom:2px}
+.hidden{display:none!important}.quick{display:grid;grid-template-columns:1fr 1fr;gap:10px}.quick button{background:#102733;border:1px solid #315564;color:#fff;border-radius:12px;padding:14px;font-weight:800;text-align:left}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:88px;display:none;background:#183d2b;border:1px solid #2d6e49;border-radius:12px;padding:12px 14px;z-index:50;max-width:90%}
+.worker{cursor:pointer}.worker+.worker{margin-top:9px}
+.login{padding-top:10vh}.center{text-align:center}
+.logoBig{transform:scale(1.8);margin:0 22px 20px}
+hr{border:0;border-top:1px solid #1f3a46}
+.kpi{font-size:32px;font-weight:900}
+.progress{height:10px;background:#17323d;border-radius:999px;overflow:hidden}.progress>div{height:100%;background:var(--green)}
+.notice{padding:10px 12px;border-radius:10px;background:#142a35;border:1px solid #315564;margin-bottom:10px}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}.tabs button{padding:9px;border-radius:9px;border:1px solid #315564;background:#102733;color:#fff;font-size:12px}.tabs .active{background:var(--orange);border-color:var(--orange)}
+.filebox{border:1px dashed #456472;border-radius:12px;padding:14px;text-align:center;margin-bottom:10px}
+.noPrint{}
+@media print{
+  body{background:white;color:black}.header,.nav,.noPrint,.btn{display:none!important}.app{max-width:none;background:white}.card{border:1px solid #ccc;background:white;color:black}.muted{color:#555}main{padding:0}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div id="header" class="header hidden">
+    <div class="headerRow">
+      <div class="brand"><span class="logo"></span>SAFE SITE</div>
+      <div class="grow"></div>
+      <span id="syncBadge" class="badge ok">Online</span>
+    </div>
+    <select id="siteSwitcher" class="siteSelect" onchange="switchSite()"></select>
+  </div>
+
+  <main>
+    <section id="login" class="screen login">
+      <div class="center"><span class="logo logoBig"></span><h1>Safe Site</h1><p class="muted">Safety, workforce & compliance</p></div>
+      <div class="card">
+        <label>Email<input id="loginEmail" value="admin@safesite.demo"></label>
+        <label>Password<input type="password" value="demo123"></label>
+        <button class="btn" onclick="login()">Sign In</button>
+        <p class="small muted">Demo credentials are pre-filled.</p>
+      </div>
+    </section>
+
+    <section id="dashboard" class="screen hidden">
+      <h1>Good Morning</h1>
+      <p class="muted">Safer people. Stronger sites.</p>
+      <div class="card">
+        <div class="row"><div class="grow"><b id="companyCtx"></b><div id="roleCtx" class="small muted"></div></div><span id="complianceBadge" class="badge ok"></span></div>
+        <div style="margin-top:12px" class="progress"><div id="complianceBar" style="width:0%"></div></div>
+      </div>
+      <div class="grid">
+        <div class="card stat"><b id="readyCount">0</b><span>Ready for Work</span></div>
+        <div class="card stat"><b id="expiringCount">0</b><span>Expiring</span></div>
+        <div class="card stat"><b id="issueCount">0</b><span>Issues</span></div>
+        <div class="card stat"><b id="actionCount">0</b><span>Open Actions</span></div>
+      </div>
+      <button class="btn" onclick="show('preshift')">▶ START PRE-SHIFT</button>
+      <div class="quick">
+        <button onclick="show('flra')">🛡️ FLRA</button>
+        <button onclick="show('inspection')">📋 Inspection</button>
+        <button onclick="show('workers')">👥 Workers</button>
+        <button onclick="show('incident')">⚠️ Incident</button>
+      </div>
+      <div class="section">Corrective actions</div>
+      <div id="dashboardActions" class="card"></div>
+      <div class="section">Recent activity</div>
+      <div id="activity" class="card"></div>
+    </section>
+
+    <section id="workers" class="screen hidden">
+      <div class="topline"><h1>Workers</h1><button id="addWorkerBtn" class="btn" style="width:auto;padding:10px 14px" onclick="show('workerEditor')">+ Add</button></div>
+      <input id="workerSearch" placeholder="Search workers..." oninput="renderWorkers()">
+      <div id="workersList"></div>
+    </section>
+
+    <section id="workerEditor" class="screen hidden">
+      <div class="back" onclick="show('workers')">‹ Back</div>
+      <h1 id="workerEditorTitle">Add Worker</h1>
+      <div class="card">
+        <label>Full Name<input id="workerName"></label>
+        <label>Role<input id="workerRole"></label>
+        <label>Employee ID<input id="workerId"></label>
+        <label>Site<select id="workerSite"></select></label>
+        <button class="btn" onclick="saveWorker()">Save Worker</button>
+      </div>
+    </section>
+
+    <section id="workerDetail" class="screen hidden">
+      <div class="back" onclick="show('workers')">‹ Back</div>
+      <h1>Worker Passport</h1>
+      <div id="workerDetailCard"></div>
+      <div class="section">Qualifications</div>
+      <div id="qualList" class="card"></div>
+      <button id="addQualBtn" class="btn secondary" onclick="show('qualificationEditor')">+ Add Qualification</button>
+      <div class="section">Certificates / Documents</div>
+      <div id="workerDocs" class="card"></div>
+      <div id="uploadDocBox" class="filebox noPrint">
+        <input id="workerDocInput" type="file" accept="image/*,.pdf" onchange="attachWorkerDocument()">
+        <div class="small muted">Attach a certificate or supporting document.</div>
+      </div>
+      <button class="btn secondary noPrint" onclick="window.print()">Print Worker Passport</button>
+    </section>
+
+    <section id="qualificationEditor" class="screen hidden">
+      <div class="back" onclick="show('workerDetail')">‹ Back</div>
+      <h1>Add Qualification</h1>
+      <div class="card">
+        <label>Qualification<input id="qualName" placeholder="First Aid"></label>
+        <label>Issued Date<input id="qualIssued" type="date"></label>
+        <label>Expiry Date<input id="qualExpiry" type="date"></label>
+        <button class="btn" onclick="saveQualification()">Save Qualification</button>
+      </div>
+    </section>
+
+    <section id="taskLibrary" class="screen hidden">
+      <div class="back" onclick="show('flra')">‹ Back to FLRA</div>
+      <div class="topline"><h1>Task Library</h1><button id="addTaskBtn" class="btn" style="width:auto;padding:10px 14px" onclick="newTask()">+ Add</button></div>
+      <input id="taskSearch" placeholder="Search tasks..." oninput="renderTaskLibrary()">
+      <div id="taskLibraryList"></div>
+    </section>
+
+    <section id="taskEditor" class="screen hidden">
+      <div class="back" onclick="show('taskLibrary')">‹ Back</div>
+      <h1 id="taskEditorTitle">Task</h1>
+      <div class="card">
+        <label>Task Name<input id="editTaskName"></label>
+        <label>Category<select id="editTaskCategory"><option>Ground Support</option><option>Development</option><option>Production</option><option>Haulage</option><option>Construction</option><option>Services</option><option>Maintenance</option><option>Other</option></select></label>
+        <label>Standard Hazards<textarea id="editTaskHazards" placeholder="One hazard per line"></textarea></label>
+        <label>Standard Controls<textarea id="editTaskControls" placeholder="One control per line"></textarea></label>
+        <button class="btn" onclick="saveTask()">Save Task</button>
+        <button id="deleteTaskBtn" class="btn danger" onclick="deleteTask()">Delete Task</button>
+      </div>
+    </section>
+
+    <section id="flra" class="screen hidden">
+      <div class="back" onclick="show('dashboard')">‹ Back</div>
+      <h1>FLRA</h1>
+      <div class="card">
+        <label>Task<select id="flraTask" onchange="loadTaskTemplate()"></select></label>
+        <button id="manageTaskBtn" class="btn secondary" onclick="show('taskLibrary')">⚙ Manage Task Library</button>
+        <label>Primary Hazards<textarea id="flraHazards"></textarea></label>
+        <label>Controls<textarea id="flraControls"></textarea></label>
+        <label>Work Area<input id="flraArea" value="Level 420 – East Drift"></label>
+        <label>Crew Acknowledgement<input id="flraCrew" placeholder="John Smith, Sarah Johnson"></label>
+        <button class="btn" onclick="submitFLRA()">Submit FLRA</button>
+      </div>
+    </section>
+
+    <section id="preshift" class="screen hidden">
+      <div class="back" onclick="show('dashboard')">‹ Back</div>
+      <h1>Pre-Shift</h1>
+      <div class="card">
+        <label>Crew<select id="psCrew"><option>Development Crew A</option><option>Construction Crew B</option><option>Service Crew</option></select></label>
+        <label>Work Area<input id="psArea" value="Level 420 – East Drift"></label>
+        <label>Task<select id="psTask"></select></label>
+        <label>Hazards<textarea id="psHazards"></textarea></label>
+        <label>Controls<textarea id="psControls"></textarea></label>
+        <label>Supervisor Sign-off<input id="psSupervisor" value="Demo Supervisor"></label>
+        <button class="btn" onclick="submitPreShift()">Submit Pre-Shift</button>
+      </div>
+    </section>
+
+    <section id="inspection" class="screen hidden">
+      <div class="back" onclick="show('dashboard')">‹ Back</div>
+      <h1>Inspection</h1>
+      <div class="card">
+        <label>Equipment<select id="inspEquip"><option>MacLean Bolter</option><option>Haul Truck</option><option>LHD</option><option>Jumbo</option><option>Longhole Drill</option></select></label>
+        <label>Condition<select id="inspCond"><option>Pass</option><option>Deficiency Found</option><option>Out of Service</option></select></label>
+        <label>Notes<textarea id="inspNotes"></textarea></label>
+        <input id="inspPhoto" type="file" accept="image/*">
+        <button class="btn" onclick="submitInspection()">Submit Inspection</button>
+      </div>
+    </section>
+
+    <section id="incident" class="screen hidden">
+      <div class="back" onclick="show('dashboard')">‹ Back</div>
+      <h1>Incident / Near Miss</h1>
+      <div class="card">
+        <label>Type<select id="incType"><option>Incident</option><option>Near Miss</option></select></label>
+        <label>Location<input id="incLocation"></label>
+        <label>Description<textarea id="incDesc"></textarea></label>
+        <label>Immediate Action<textarea id="incAction"></textarea></label>
+        <label>People Involved<input id="incPeople"></label>
+        <input id="incPhoto" type="file" accept="image/*">
+        <button class="btn" onclick="submitIncident()">Submit Report</button>
+      </div>
+    </section>
+
+    <section id="actions" class="screen hidden">
+      <div class="topline"><h1>Corrective Actions</h1><button id="addActionBtn" class="btn" style="width:auto;padding:10px 14px" onclick="addAction()">+ Add</button></div>
+      <div id="actionsList"></div>
+    </section>
+
+    <section id="reports" class="screen hidden">
+      <h1>Reports</h1>
+      <div class="grid">
+        <div class="card stat"><b id="rWorkers">0</b><span>Total Workers</span></div>
+        <div class="card stat"><b id="rCompliance">0%</b><span>Compliance</span></div>
+        <div class="card stat"><b id="rRecords">0</b><span>Safety Records</span></div>
+        <div class="card stat"><b id="rActions">0</b><span>Open Actions</span></div>
+      </div>
+      <div class="tabs">
+        <button class="active" onclick="setReportTab('records',this)">Records</button>
+        <button onclick="setReportTab('actions',this)">Actions</button>
+        <button onclick="setReportTab('audit',this)">Audit</button>
+      </div>
+      <div id="reportsBody" class="card"></div>
+      <button class="btn secondary noPrint" onclick="window.print()">Print / Save PDF</button>
+      <button class="btn secondary noPrint" onclick="exportJSON()">Export JSON</button>
+      <button class="btn secondary noPrint" onclick="exportWorkersCSV()">Export Workers CSV</button>
+    </section>
+
+    <section id="admin" class="screen hidden">
+      <h1>Administration</h1>
+      <div class="card">
+        <label>Company<input id="companyName"></label>
+        <label>Current Site<input id="currentSiteName"></label>
+        <label>Your Role<select id="currentRole"><option>Administrator</option><option>Supervisor</option><option>Safety Coordinator</option><option>Worker</option><option>Client Viewer</option></select></label>
+        <button class="btn" onclick="saveAdminSettings()">Save Settings</button>
+      </div>
+
+      <div class="section">Sites</div>
+      <div id="sitesAdmin" class="card"></div>
+      <button class="btn secondary" onclick="addSite()">+ Add Site</button>
+
+      <div class="section">Users</div>
+      <div id="usersAdmin" class="card"></div>
+      <button class="btn secondary" onclick="inviteUser()">+ Invite User</button>
+
+      <div class="section">Worker Import</div>
+      <div class="card">
+        <input id="csvInput" type="file" accept=".csv,text/csv" onchange="importWorkersCSV()">
+        <div class="small muted">CSV columns: name, role, employee_id, site</div>
+      </div>
+
+      <div class="section">System</div>
+      <div class="card">
+        <div class="item row"><div class="grow"><b>Offline storage</b><div class="small muted">Forms save locally if service is lost.</div></div><span class="badge ok">Enabled</span></div>
+        <div class="item row"><div class="grow"><b>Audit logging</b><div class="small muted">Important record changes are tracked.</div></div><span class="badge ok">Enabled</span></div>
+      </div>
+      <button class="btn danger" onclick="resetDemo()">Reset Demo Data</button>
+    </section>
+  </main>
+
+  <div id="nav" class="nav hidden">
+    <button id="n-dashboard" onclick="show('dashboard')"><span>⌂</span>Home</button>
+    <button id="n-workers" onclick="show('workers')"><span>👥</span>Workers</button>
+    <button id="n-flra" onclick="show('flra')"><span>☑</span>Tasks</button>
+    <button id="n-reports" onclick="show('reports')"><span>▥</span>Reports</button>
+    <button id="n-admin" onclick="show('admin')"><span>☰</span>More</button>
+  </div>
+</div>
+<div id="toast" class="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
