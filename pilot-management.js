@@ -78,6 +78,8 @@
       .dashboardManage button{background:#153440;border:1px solid #315564;color:#fff;border-radius:12px;padding:12px;font-weight:800}
       .pilotOverdueBox{border:1px solid #8d3434;background:rgba(239,75,75,.08)}
       .emptyState{text-align:center;padding:20px 8px;color:#9cb0ba}
+      #recordDetailBody{padding-bottom:36px}
+      #recordDetail{padding-bottom:48px}
       @media(max-width:360px){.pilotFilters{grid-template-columns:1fr}.pilotFilters .wide{grid-column:auto}}
     `;
     document.head.appendChild(style);
@@ -251,7 +253,7 @@
       reportsBody.innerHTML = rows.length ? rows.map(r=>`
         <div class="recordCard" onclick="openRecordDetail('${esc(r.id)}')">
           <div class="recordType">${esc(r.type)}</div>
-          <div class="row"><div class="grow"><b>${esc(r.title)}</b></div><span class="badge info">Open</span></div>
+          <div class="row"><div class="grow"><b>${esc(r.title)}</b></div><span class="badge ok">Completed</span></div>
           <div class="recordMeta">
             <span class="small muted">${esc(r.details?.area || r.details?.workArea || 'No work area')}</span>
             <span class="small muted">• ${esc(new Date(r.time).toLocaleString())}</span>
@@ -355,6 +357,44 @@
   window.show = function(id){
     ensurePilotUI();
     return baseShow(id);
+  };
+
+  // Pilot polish: preserve inspection Work Area / Location in the local view and cloud record.
+  const baseSubmitInspection = window.submitInspection;
+  window.submitInspection = async function(){
+    const area = (document.getElementById('inspArea')?.value || '').trim();
+    const beforeIds = new Set((db.records||[]).map(r=>String(r.id)));
+    await baseSubmitInspection();
+    const created = (db.records||[]).find(r=>!beforeIds.has(String(r.id)) && r.type === 'Inspection');
+    if(created && area){
+      created.details = created.details || {};
+      created.details.area = area;
+      created.details.workArea = area;
+      persist();
+    }
+    // The base cloud save already stores the inspection. Update the newest matching
+    // cloud record so Reports and future sessions retain the work area.
+    try{
+      if(area && typeof getSupabaseClient === 'function' && cloudOrganizationId){
+        const client = getSupabaseClient();
+        let q = client.from('safety_records')
+          .select('id,data')
+          .eq('organization_id',cloudOrganizationId)
+          .eq('record_type','inspection')
+          .order('created_at',{ascending:false})
+          .limit(1);
+        if(cloudSiteId) q = q.eq('site_id',cloudSiteId);
+        const {data: rows, error} = await q;
+        if(!error && rows && rows[0]){
+          const oldData = rows[0].data || {};
+          await client.from('safety_records').update({
+            work_area: area,
+            data: {...oldData, area: area, workArea: area}
+          }).eq('id',rows[0].id);
+          if(created) created.details = {...created.details, area, workArea:area};
+        }
+      }
+    }catch(e){ console.warn('Inspection work area cloud update skipped',e); }
   };
 
   ensurePilotUI();
