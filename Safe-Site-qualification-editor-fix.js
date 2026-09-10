@@ -1,4 +1,4 @@
-// Safe Site - Qualification Editor cloud expiry fix v2
+// qualification-editor.js
 (function () {
   'use strict';
   const byId = id => document.getElementById(id);
