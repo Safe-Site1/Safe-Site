@@ -1,9 +1,12 @@
-Upload qr-status-fix.js to the root of the Safe-Site GitHub repository.
+1. Upload expiry-intelligence.js to the root of the Safe-Site GitHub repository.
 
-Then open index.html and add this line directly AFTER:
-<script src="worker-pass-documents.js?v=20260909e"></script>
+2. Open index.html and add this line directly AFTER the qr-status-fix.js line:
 
-Add:
-<script src="qr-status-fix.js?v=20260909f"></script>
+<script src="expiry-intelligence.js?v=20260909g"></script>
 
-Commit the change and wait for Vercel to redeploy.
+3. Commit changes and wait about one minute for Vercel.
+
+Test:
+- Home should show Training Expiry Alerts with ≤30, 31–60, and 61–90 day counts.
+- Worker Passport qualifications should show expiry countdown/bands.
+- Scanned QR Worker Pass should show an Expiry Watch section and next dated expiry.
