@@ -1,0 +1,28 @@
+SAFE SITE — QUALIFICATION EDITOR UPDATE
+
+1. Upload qualification-editor.js to the ROOT of the Safe-Site GitHub repository.
+
+2. Open index.html and add this line immediately BEFORE </body>:
+
+<script src="qualification-editor.js?v=20260910a"></script>
+
+IMPORTANT:
+Keep the existing expiry-intelligence.js and expiry-drilldown.js lines.
+Do not replace them.
+
+3. Commit the change.
+
+4. Wait about one minute for Vercel.
+
+TEST:
+- Open Safe Site and refresh.
+- Workers > Test worker.
+- Tap the First aid qualification.
+- The screen should say Edit Qualification.
+- Change the expiry date to a date within the next 30 days.
+- Tap Save Changes.
+- Return Home.
+- Training Expiry Alerts should now show 1 in Due / Expired ≤30d.
+- Tap that expiry box to confirm Test worker appears in the drilldown.
+
+This edit saves directly to the existing Supabase qualifications record.
