@@ -1,7 +1,9 @@
-Upload worker-pass-documents.js to the root of the Safe-Site GitHub repository.
+Upload qr-status-fix.js to the root of the Safe-Site GitHub repository.
 
-Then open index.html and add this line directly AFTER the action-closeout.js line:
-
+Then open index.html and add this line directly AFTER:
 <script src="worker-pass-documents.js?v=20260909e"></script>
+
+Add:
+<script src="qr-status-fix.js?v=20260909f"></script>
 
 Commit the change and wait for Vercel to redeploy.
