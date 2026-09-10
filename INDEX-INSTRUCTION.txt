@@ -1,5 +1,7 @@
-In index.html, directly after:
-<script src="team-permissions.js?v=20260909c"></script>
+Upload worker-pass-documents.js to the root of the Safe-Site GitHub repository.
 
-add:
-<script src="action-closeout.js?v=20260909d"></script>
+Then open index.html and add this line directly AFTER the action-closeout.js line:
+
+<script src="worker-pass-documents.js?v=20260909e"></script>
+
+Commit the change and wait for Vercel to redeploy.
