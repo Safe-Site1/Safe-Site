@@ -1,4 +1,5 @@
 In index.html, directly after:
-<script src="pilot-management.js?v=20260909b"></script>
-add:
 <script src="team-permissions.js?v=20260909c"></script>
+
+add:
+<script src="action-closeout.js?v=20260909d"></script>
