@@ -66,8 +66,17 @@
   }
 
   function evaluateWorker(worker) {
-    const siteRules = REQUIREMENTS[worker.site] || {};
-    const required = siteRules[worker.role] || [];
+  const siteKey = Object.keys(REQUIREMENTS).find(
+  key => normalize(key) === normalize(worker.site)
+);
+
+const siteRules = siteKey ? REQUIREMENTS[siteKey] : {};
+
+const roleKey = Object.keys(siteRules).find(
+  key => normalize(key) === normalize(worker.role)
+);
+
+const required = roleKey ? siteRules[roleKey] : [];
 
     const results = required.map(requirement => {
       const qualification = findQualification(worker, requirement);
