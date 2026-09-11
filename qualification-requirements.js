@@ -26,6 +26,8 @@
 
   let RULES = {};
   let currentSiteRules = [];
+  let cloudRulesLoaded = false;
+  let cloudRulesLoading = false;
 
   function normalize(value) {
     return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -77,7 +79,9 @@
     });
 
     let overall = 'ready';
-    if (requirements.some(r => r.status === 'expired')) overall = 'expired';
+    if (!cloudRulesLoaded) overall = 'loading';
+    else if (!rules.length) overall = 'unconfigured';
+    else if (requirements.some(r => r.status === 'expired')) overall = 'expired';
     else if (requirements.some(r => r.status === 'missing')) overall = 'missing';
     else if (requirements.some(r => r.status === 'expiring')) overall = 'expiring';
 
@@ -89,12 +93,14 @@
       ready:'READY FOR WORK',
       expiring:'TRAINING EXPIRING',
       missing:'MISSING TRAINING',
-      expired:'TRAINING EXPIRED'
+      expired:'TRAINING EXPIRED',
+      loading:'CHECKING REQUIREMENTS',
+      unconfigured:'REVIEW REQUIRED'
     })[status] || 'REVIEW REQUIRED';
   }
 
   function statusSymbol(status) {
-    return ({ready:'✅',valid:'✅',expiring:'⚠️',missing:'❌',expired:'⛔'})[status] || '⚠️';
+    return ({ready:'✅',valid:'✅',expiring:'⚠️',missing:'❌',expired:'⛔',loading:'⏳',unconfigured:'⚠️'})[status] || '⚠️';
   }
 
   function renderWorkerRequirements() {
@@ -114,7 +120,11 @@
       else document.getElementById('workerDetail')?.appendChild(container);
     }
 
-    const rows = evaluation.requirements.length ? evaluation.requirements.map(item => {
+    const rows = evaluation.overall === 'loading'
+      ? '<div class="muted">Loading required qualifications from Safe Site cloud…</div>'
+      : evaluation.overall === 'unconfigured'
+        ? '<div class="muted">No qualification requirements are configured for this role. Worker is not marked Ready for Work until requirements are configured.</div>'
+        : evaluation.requirements.length ? evaluation.requirements.map(item => {
       const detail = item.qualification?.expires
         ? '<div class="muted small">Expires ' + esc(item.qualification.expires) + '</div>'
         : '';
@@ -139,8 +149,15 @@
     worker.safeSiteCompliance = evaluation.overall;
   }
 
-  async function loadCloudRequirements() {
-    if (typeof initSupabase !== 'function' || !cloudOrganizationId) return;
+  async function loadCloudRequirements(attempt = 0) {
+    if (cloudRulesLoading) return;
+    if (typeof initSupabase !== 'function' || !cloudOrganizationId || !cloudSiteIds || !Object.keys(cloudSiteIds).length) {
+      cloudRulesLoaded = false;
+      renderWorkerRequirements();
+      if (attempt < 12) setTimeout(() => loadCloudRequirements(attempt + 1), 500);
+      return;
+    }
+    cloudRulesLoading = true;
     const client = initSupabase();
 
     const { data, error } = await client.from('qualification_requirements')
@@ -149,7 +166,11 @@
       .eq('active', true);
 
     if (error) {
+      cloudRulesLoading = false;
+      cloudRulesLoaded = false;
       console.warn('Safe Site requirements cloud load failed', error);
+      renderWorkerRequirements();
+      if (attempt < 12) setTimeout(() => loadCloudRequirements(attempt + 1), 750);
       return;
     }
 
@@ -167,6 +188,8 @@
     });
 
     RULES = next;
+    cloudRulesLoaded = true;
+    cloudRulesLoading = false;
     window.SafeSiteQualificationRequirements.requirements = RULES;
 
     renderWorkerRequirements();
