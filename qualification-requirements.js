@@ -449,7 +449,11 @@
       const client = initSupabase();
       const siteName = document.getElementById('qrAdminSite').value;
       const siteId = cloudSiteIds?.[siteName];
-      const role = document.getElementById('qrAdminRole').value.trim();
+      const typedRole = document.getElementById('qrAdminRole').value.trim();
+      const existingRole = currentSiteRules.find(r => normalize(r.job_title) === normalize(typedRole))?.job_title;
+      const workerRole = (db.workers || []).find(w => normalize(w.role) === normalize(typedRole))?.role;
+      const role = existingRole || workerRole || typedRole.replace(/\b\w/g, c => c.toUpperCase());
+      document.getElementById('qrAdminRole').value = role;
       const qualifications = document.getElementById('qrAdminQualifications').value
         .split('\n').map(x => x.trim()).filter(Boolean);
 
@@ -478,7 +482,7 @@
         .delete()
         .eq('organization_id',cloudOrganizationId)
         .eq('site_id',siteId)
-        .eq('job_title',role);
+        .ilike('job_title',role);
 
       if (result.error) throw result.error;
 
