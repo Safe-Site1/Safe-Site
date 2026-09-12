@@ -1,18 +1,13 @@
-SAFE SITE - WORKER PASSPORT EXPIRY DISPLAY FIX
+SAFE SITE - QUALIFICATION ROW RENDERER FIX
 
-1. Upload worker-passport-expiry-display-fix.js to the root of the Safe-Site GitHub repository.
-2. Open index.html.
-3. Immediately before </body>, add:
+Upload qualification-row-renderer-fix.js to the repository root.
 
-<script src="worker-passport-expiry-display-fix.js?v=20260911a"></script>
+Then add this line immediately before </body> in index.html, AFTER the existing passport expiry display fix:
 
-4. Commit.
-5. Wait for Vercel to deploy and refresh Safe Site.
+<script src="qualification-row-renderer-fix.js?v=20260912a"></script>
 
-Expected result:
-Test Worker > First aid should display:
-Expires Sep 20, 2027
-instead of:
-No expiry
+Commit and allow Vercel to deploy.
 
-This fix changes display only. It does not modify qualification data.
+Expected:
+First aid -> Expires Sep 20, 2027
+Qualifications without an expiry -> No expiry
