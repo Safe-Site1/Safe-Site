@@ -14,9 +14,10 @@
 
   function renderQualificationRows(){
     const w=(db.workers||[]).find(x=>String(x.id)===String(currentWorkerId));
-    if(!w || !window.qualList) return;
+    const list=document.getElementById('qualList');
+if(!w || !list) return;
 
-    qualList.innerHTML=(w.quals||[]).map(q=>{
+    list.innerHTML=(w.quals||[]).map(q=>{
       const st=qualificationStatus(q);
       const expiryText=formatDate(q.expires);
       return `<div class="item row" data-qualification-id="${q.id||''}">
