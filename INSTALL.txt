@@ -1,13 +1,4 @@
-SAFE SITE - QUALIFICATION ROW RENDERER FIX
-
-Upload qualification-row-renderer-fix.js to the repository root.
-
-Then add this line immediately before </body> in index.html, AFTER the existing passport expiry display fix:
-
-<script src="qualification-row-renderer-fix.js?v=20260912a"></script>
-
-Commit and allow Vercel to deploy.
-
-Expected:
-First aid -> Expires Sep 20, 2027
-Qualifications without an expiry -> No expiry
+Upload ai-risk-assessment.js to the repository root.
+Then add immediately before </body> in index.html:
+<script src="ai-risk-assessment.js?v=20260912a"></script>
+Commit, let Vercel deploy, refresh, and open Pre-Task Risk Assessment.
