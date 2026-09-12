@@ -1,0 +1,4 @@
+Upload qualification-duplicate-fix.js to the repository root.
+Then add this immediately before </body> in index.html:
+<script src="qualification-duplicate-fix.js?v=20260911a"></script>
+Commit and let Vercel deploy.
