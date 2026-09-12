@@ -1,18 +1,21 @@
-Safe Site AI Risk Assessment v3.2
+Safe Site AI Risk Assessment v3.3
 
-Adds a residual-risk stop-work gate.
+Adds a permanent AI audit trail without changing the database schema.
 
-Behavior:
-- Supervisor AI review remains mandatory.
-- Residual risk at/above the configured site threshold disables Submit.
-- The screen shows STOP — additional controls required.
-- Changing controls or residual risk requires the supervisor to reconfirm the controls/risk review.
-- A second click/function guard prevents bypass.
-- Default threshold is 10 only for the current demo.
-- Site configuration can override with:
-  db.settings.riskStopWorkThreshold
-  or window.SAFE_SITE_RISK_CONFIG.stopWorkThreshold
+For each submitted AI-assisted Pre-Task Risk Assessment, safety_records.data.aiAudit stores:
+- original AI hazards and controls
+- original AI risk suggestions
+- AI generation timestamp/source
+- supervisor review completion timestamp
+- every stop-work threshold event
+- final supervisor-reviewed hazards and controls
+- final initial/residual ratings
+- final residual score and configured stop-work threshold
+- supervisor and crew acknowledgement
 
-Before real-world deployment, configure the approved company/site risk matrix and stop-work threshold.
+Safe Site also attempts a compact audit_log entry linked to the safety record.
+If audit_log insertion is unavailable, the full audit still remains in safety_records.data.aiAudit.
+
+Existing v3.2 supervisor-review and residual-risk gates remain active.
 
 Replace ai-risk-assessment.js in GitHub and commit to main.

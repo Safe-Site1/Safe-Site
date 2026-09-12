@@ -1,4 +1,4 @@
-/* Safe Site - AI Risk Assessment v3.2: supervisor review + residual-risk stop-work gate */
+/* Safe Site - AI Risk Assessment v3.3: supervisor review + stop-work gate + permanent AI audit trail */
 (function(){
 'use strict';
 const byId=id=>document.getElementById(id);
@@ -103,8 +103,19 @@ function submitButton(){
 function updateSubmitGate(){
   const b=submitButton(); if(!b)return;
   ensureResidualNotice();
-  const reviewLocked=!!window.__safeSiteAiDraftPendingReview && !reviewComplete();
+  const audit=window.__safeSiteAiAudit;
   const riskLocked=residualBlocked();
+  if(audit&&riskLocked){
+    const score=residualScore(), threshold=stopWorkThreshold();
+    const last=audit.stopWorkEvents?.[audit.stopWorkEvents.length-1];
+    if(!last||last.score!==score){
+      (audit.stopWorkEvents ||= []).push({at:new Date().toISOString(),score,threshold});
+    }
+  }
+  if(audit&&window.__safeSiteAiDraftPendingReview&&reviewComplete()&&!audit.supervisorReviewCompletedAt){
+    audit.supervisorReviewCompletedAt=new Date().toISOString();
+  }
+  const reviewLocked=!!window.__safeSiteAiDraftPendingReview && !reviewComplete();
   const locked=reviewLocked||riskLocked;
   b.disabled=locked;
   b.style.opacity=locked?'0.45':'';
@@ -133,6 +144,23 @@ function installSubmitGuard(){
 }
 function applyDraft(draft,source){
   const hazards=unique(draft?.hazards||[]), controls=unique(draft?.controls||[]);
+  window.__safeSiteAiAudit={
+    used:true,
+    source,
+    generatedAt:new Date().toISOString(),
+    originalDraft:{
+      hazards:[...hazards],
+      controls:[...controls],
+      initialLikelihood:Number(draft?.initial_likelihood)||null,
+      initialSeverity:Number(draft?.initial_severity)||null,
+      residualLikelihood:Number(draft?.residual_likelihood)||null,
+      residualSeverity:Number(draft?.residual_severity)||null,
+      reviewQuestions:unique(draft?.review_questions||[]),
+      summary:clean(draft?.summary||'')
+    },
+    stopWorkEvents:[],
+    supervisorReviewCompletedAt:null
+  };
   if(byId('praHazards')&&hazards.length) byId('praHazards').value=hazards.join('\n');
   if(byId('praControls')&&controls.length) byId('praControls').value=controls.join('\n');
   setSelect('praInitialLikelihood',Number(draft?.initial_likelihood));
@@ -198,6 +226,70 @@ window.generateAIRiskAssessment=async function(){
     if(b){b.disabled=false;b.textContent='Generate with AI';}
   }
 };
+function currentAuditPayload(){
+  const a=window.__safeSiteAiAudit;
+  if(!a?.used)return null;
+  return {
+    version:'3.3',
+    aiUsed:true,
+    source:a.source,
+    generatedAt:a.generatedAt,
+    originalDraft:a.originalDraft,
+    supervisorReviewCompletedAt:a.supervisorReviewCompletedAt,
+    stopWorkTriggered:(a.stopWorkEvents||[]).length>0,
+    stopWorkEvents:a.stopWorkEvents||[],
+    finalReviewed:{
+      hazards:lines(byId('praHazards')?.value),
+      controls:lines(byId('praControls')?.value),
+      initialLikelihood:Number(byId('praInitialLikelihood')?.value||0),
+      initialSeverity:Number(byId('praInitialSeverity')?.value||0),
+      residualLikelihood:Number(byId('praResidualLikelihood')?.value||0),
+      residualSeverity:Number(byId('praResidualSeverity')?.value||0),
+      residualScore:residualScore(),
+      stopWorkThreshold:stopWorkThreshold(),
+      supervisor:clean(byId('praSupervisor')?.value),
+      crew:clean(byId('praCrew')?.value),
+      reviewedAt:new Date().toISOString()
+    }
+  };
+}
+function installCloudAuditWrapper(){
+  if(typeof window.saveCloudSafetyRecord!=='function'||window.saveCloudSafetyRecord.__aiAuditWrapped)return;
+  const original=window.saveCloudSafetyRecord;
+  const wrapped=async function(recordType,title,workArea,taskName,data,statusValue){
+    const audit=recordType==='pre_task_risk_assessment'?currentAuditPayload():null;
+    const merged=audit?{...(data||{}),aiAudit:audit}:data;
+    const row=await original.call(this,recordType,title,workArea,taskName,merged,statusValue);
+    if(audit){
+      try{
+        const client=typeof initSupabase==='function'?initSupabase():null;
+        const org=(typeof cloudOrganizationId!=='undefined'?cloudOrganizationId:null);
+        const user=(typeof cloudUser!=='undefined'?cloudUser?.id:null);
+        if(client&&org&&row?.id){
+          await client.from('audit_log').insert({
+            organization_id:org,
+            user_id:user,
+            action:'ai_risk_assessment_approved',
+            entity_type:'safety_record',
+            entity_id:row.id,
+            metadata:{
+              ai_source:audit.source,
+              generated_at:audit.generatedAt,
+              supervisor_review_completed_at:audit.supervisorReviewCompletedAt,
+              stop_work_triggered:audit.stopWorkTriggered,
+              stop_work_events:audit.stopWorkEvents,
+              final_residual_score:audit.finalReviewed.residualScore,
+              stop_work_threshold:audit.finalReviewed.stopWorkThreshold
+            }
+          });
+        }
+      }catch(e){console.warn('AI audit_log insert unavailable; audit remains stored in safety record',e);}
+    }
+    return row;
+  };
+  wrapped.__aiAuditWrapped=true;
+  window.saveCloudSafetyRecord=wrapped;
+}
 function wrapSubmit(){
   if(typeof window.submitRiskAssessment!=='function'||window.submitRiskAssessment.__aiWrapped)return;
   const original=window.submitRiskAssessment;
@@ -216,6 +308,7 @@ function wrapSubmit(){
     }
     const result=await original.apply(this,arguments);
     window.__safeSiteAiDraftPendingReview=false;
+    window.__safeSiteAiAudit=null;
     return result;
   };
   wrapped.__aiWrapped=true;
@@ -228,6 +321,7 @@ function install(){
     const note=document.createElement('div');note.id='aiRiskStatus';note.className='notice small';note.textContent='AI creates a draft only. Supervisor review is required before work starts.';
     const a=s.closest('label')||s;a.insertAdjacentElement('afterend',b);b.insertAdjacentElement('afterend',note);
   }
+  installCloudAuditWrapper();
   wrapSubmit();
   installSubmitGuard();
   ['praResidualLikelihood','praResidualSeverity'].forEach(id=>{
