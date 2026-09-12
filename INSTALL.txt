@@ -1,4 +1,6 @@
-Upload ai-risk-assessment.js to the repository root.
-Then add immediately before </body> in index.html:
-<script src="ai-risk-assessment.js?v=20260912a"></script>
-Commit, let Vercel deploy, refresh, and open Pre-Task Risk Assessment.
+SAFE SITE AI RISK ASSESSMENT V2
+
+Replace the existing ai-risk-assessment.js in the root of the Safe-Site GitHub repository with the included file and commit the change.
+
+Do not put an OpenAI API key in GitHub or the browser code.
+The key will be configured securely on the server side in the next step.
