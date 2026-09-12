@@ -1,21 +1,9 @@
-Safe Site AI Risk Assessment v3.3
+Safe Site AI Risk Assessment v3.4
 
-Adds a permanent AI audit trail without changing the database schema.
-
-For each submitted AI-assisted Pre-Task Risk Assessment, safety_records.data.aiAudit stores:
-- original AI hazards and controls
-- original AI risk suggestions
-- AI generation timestamp/source
-- supervisor review completion timestamp
-- every stop-work threshold event
-- final supervisor-reviewed hazards and controls
-- final initial/residual ratings
-- final residual score and configured stop-work threshold
-- supervisor and crew acknowledgement
-
-Safe Site also attempts a compact audit_log entry linked to the safety record.
-If audit_log insertion is unavailable, the full audit still remains in safety_records.data.aiAudit.
-
-Existing v3.2 supervisor-review and residual-risk gates remain active.
+Audit-quality fix:
+- Final supervisor-reviewed hazards and controls are now split only on line breaks.
+- Commas inside a hazard/control sentence are preserved exactly.
+- Original AI draft, supervisor review gate, residual-risk stop-work gate,
+  stop-work history, timestamps and audit_log behavior remain unchanged.
 
 Replace ai-risk-assessment.js in GitHub and commit to main.

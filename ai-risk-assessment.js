@@ -1,4 +1,4 @@
-/* Safe Site - AI Risk Assessment v3.3: supervisor review + stop-work gate + permanent AI audit trail */
+/* Safe Site - AI Risk Assessment v3.4: sentence-safe permanent AI audit trail */
 (function(){
 'use strict';
 const byId=id=>document.getElementById(id);
@@ -226,6 +226,9 @@ window.generateAIRiskAssessment=async function(){
     if(b){b.disabled=false;b.textContent='Generate with AI';}
   }
 };
+function auditLines(v){
+  return String(v||'').split(/\n+/).map(x=>x.trim()).filter(Boolean);
+}
 function currentAuditPayload(){
   const a=window.__safeSiteAiAudit;
   if(!a?.used)return null;
@@ -239,8 +242,8 @@ function currentAuditPayload(){
     stopWorkTriggered:(a.stopWorkEvents||[]).length>0,
     stopWorkEvents:a.stopWorkEvents||[],
     finalReviewed:{
-      hazards:lines(byId('praHazards')?.value),
-      controls:lines(byId('praControls')?.value),
+      hazards:auditLines(byId('praHazards')?.value),
+      controls:auditLines(byId('praControls')?.value),
       initialLikelihood:Number(byId('praInitialLikelihood')?.value||0),
       initialSeverity:Number(byId('praInitialSeverity')?.value||0),
       residualLikelihood:Number(byId('praResidualLikelihood')?.value||0),
