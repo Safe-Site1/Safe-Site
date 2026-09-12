@@ -1,9 +1,18 @@
-Safe Site AI Risk Assessment v3.1
+Safe Site AI Risk Assessment v3.2
 
-Fix:
-- The Pre-Task Risk Assessment submit button is disabled after an AI draft is generated.
-- It remains disabled until every AI hazard is checked and the controls/risk confirmation is checked.
-- A capture-phase click guard also blocks submission as a second layer.
-- The existing live AI, site context, review questions and local fallback remain intact.
+Adds a residual-risk stop-work gate.
+
+Behavior:
+- Supervisor AI review remains mandatory.
+- Residual risk at/above the configured site threshold disables Submit.
+- The screen shows STOP — additional controls required.
+- Changing controls or residual risk requires the supervisor to reconfirm the controls/risk review.
+- A second click/function guard prevents bypass.
+- Default threshold is 10 only for the current demo.
+- Site configuration can override with:
+  db.settings.riskStopWorkThreshold
+  or window.SAFE_SITE_RISK_CONFIG.stopWorkThreshold
+
+Before real-world deployment, configure the approved company/site risk matrix and stop-work threshold.
 
 Replace ai-risk-assessment.js in GitHub and commit to main.

@@ -1,4 +1,4 @@
-/* Safe Site - AI Risk Assessment v3.1: enforced supervisor review gate */
+/* Safe Site - AI Risk Assessment v3.2: supervisor review + residual-risk stop-work gate */
 (function(){
 'use strict';
 const byId=id=>document.getElementById(id);
@@ -70,16 +70,46 @@ function reviewComplete(){
   return hazards.length>0 && hazards.every(x=>x.checked) && !!byId('aiControlsRiskReviewed')?.checked;
 }
 
+function stopWorkThreshold(){
+  const candidates=[
+    window.SAFE_SITE_RISK_CONFIG?.stopWorkThreshold,
+    (typeof db!=='undefined' ? db?.settings?.riskStopWorkThreshold : null),
+    (typeof db!=='undefined' ? db?.settings?.stopWorkThreshold : null)
+  ];
+  const n=Number(candidates.find(v=>v!==undefined&&v!==null&&v!==''));
+  return Number.isFinite(n)&&n>=1&&n<=25?n:10; // demo default only; configure per site before real-world use
+}
+function residualScore(){
+  return Number(byId('praResidualLikelihood')?.value||0)*Number(byId('praResidualSeverity')?.value||0);
+}
+function residualBlocked(){ return residualScore()>=stopWorkThreshold(); }
+function ensureResidualNotice(){
+  let box=byId('aiResidualGateNotice');
+  if(!box){
+    box=document.createElement('div');box.id='aiResidualGateNotice';box.className='notice small warn';box.style.display='none';
+    byId('praResidualResult')?.insertAdjacentElement('afterend',box);
+  }
+  const blocked=residualBlocked(),score=residualScore(),threshold=stopWorkThreshold();
+  if(blocked){
+    box.style.display='block';
+    box.innerHTML='<b>STOP — additional controls required.</b><br>Residual risk score '+score+' meets or exceeds this site’s current stop-work threshold ('+threshold+'). Strengthen the controls and reassess the residual risk before work proceeds.';
+  }else{
+    box.style.display='none';box.textContent='';
+  }
+}
 function submitButton(){
   return [...document.querySelectorAll('button')].find(b=>/Submit Pre-Task Risk Assessment/i.test(b.textContent||''));
 }
 function updateSubmitGate(){
   const b=submitButton(); if(!b)return;
-  const locked=!!window.__safeSiteAiDraftPendingReview && !reviewComplete();
+  ensureResidualNotice();
+  const reviewLocked=!!window.__safeSiteAiDraftPendingReview && !reviewComplete();
+  const riskLocked=residualBlocked();
+  const locked=reviewLocked||riskLocked;
   b.disabled=locked;
   b.style.opacity=locked?'0.45':'';
   b.style.cursor=locked?'not-allowed':'';
-  b.title=locked?'Complete Supervisor AI Draft Review before submitting':'';
+  b.title=reviewLocked?'Complete Supervisor AI Draft Review before submitting':(riskLocked?'Additional controls and residual-risk reassessment required before submitting':'');
 }
 function installSubmitGuard(){
   const b=submitButton();
@@ -91,6 +121,13 @@ function installSubmitGuard(){
       status('Complete the Supervisor AI Draft Review before submitting this assessment.',true);
       byId('aiSupervisorReview')?.scrollIntoView({behavior:'smooth',block:'center'});
       if(typeof toast==='function')toast('Supervisor review is required');
+      return;
+    }
+    if(residualBlocked()){
+      e.preventDefault();e.stopImmediatePropagation();
+      ensureResidualNotice();
+      byId('aiResidualGateNotice')?.scrollIntoView({behavior:'smooth',block:'center'});
+      if(typeof toast==='function')toast('Residual risk is above the site stop-work threshold');
     }
   },true);
 }
@@ -171,6 +208,12 @@ function wrapSubmit(){
       if(typeof toast==='function')toast('Supervisor review is required');
       return;
     }
+    if(residualBlocked()){
+      ensureResidualNotice();
+      byId('aiResidualGateNotice')?.scrollIntoView({behavior:'smooth',block:'center'});
+      if(typeof toast==='function')toast('Additional controls are required before work can proceed');
+      return;
+    }
     const result=await original.apply(this,arguments);
     window.__safeSiteAiDraftPendingReview=false;
     return result;
@@ -187,6 +230,30 @@ function install(){
   }
   wrapSubmit();
   installSubmitGuard();
+  ['praResidualLikelihood','praResidualSeverity'].forEach(id=>{
+    const el=byId(id);
+    if(el&&el.dataset.aiRiskGate!=='1'){
+      el.dataset.aiRiskGate='1';
+      el.addEventListener('change',()=>{
+        if(window.__safeSiteAiDraftPendingReview){
+          const confirm=byId('aiControlsRiskReviewed');
+          if(confirm) confirm.checked=false;
+        }
+        updateSubmitGate();
+      });
+    }
+  });
+  const controls=byId('praControls');
+  if(controls&&controls.dataset.aiRiskGate!=='1'){
+    controls.dataset.aiRiskGate='1';
+    controls.addEventListener('input',()=>{
+      if(window.__safeSiteAiDraftPendingReview){
+        const confirm=byId('aiControlsRiskReviewed');
+        if(confirm) confirm.checked=false;
+      }
+      updateSubmitGate();
+    });
+  }
   updateSubmitGate();
 }
 document.addEventListener('DOMContentLoaded',install);window.addEventListener('load',install);setTimeout(install,500);setTimeout(wrapSubmit,1200);
