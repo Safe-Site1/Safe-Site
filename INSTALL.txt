@@ -1,6 +1,9 @@
-SAFE SITE AI RISK ASSESSMENT V2
+Safe Site AI Risk Assessment v3.1
 
-Replace the existing ai-risk-assessment.js in the root of the Safe-Site GitHub repository with the included file and commit the change.
+Fix:
+- The Pre-Task Risk Assessment submit button is disabled after an AI draft is generated.
+- It remains disabled until every AI hazard is checked and the controls/risk confirmation is checked.
+- A capture-phase click guard also blocks submission as a second layer.
+- The existing live AI, site context, review questions and local fallback remain intact.
 
-Do not put an OpenAI API key in GitHub or the browser code.
-The key will be configured securely on the server side in the next step.
+Replace ai-risk-assessment.js in GitHub and commit to main.

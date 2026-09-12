@@ -1,4 +1,4 @@
- /* Safe Site - AI Risk Assessment v3: live AI + supervisor review workflow */
+/* Safe Site - AI Risk Assessment v3.1: enforced supervisor review gate */
 (function(){
 'use strict';
 const byId=id=>document.getElementById(id);
@@ -60,11 +60,39 @@ function renderReview(hazards,controls,summary){
     hs.map((h,i)=>'<label style="display:flex;gap:10px;align-items:flex-start;margin:8px 0"><input type="checkbox" class="aiHazardReview" data-i="'+i+'" style="width:auto;margin-top:3px"><span>'+escapeHtml(h)+'</span></label>').join('')+
     '<label style="display:flex;gap:10px;align-items:flex-start;margin:12px 0"><input type="checkbox" id="aiControlsRiskReviewed" style="width:auto;margin-top:3px"><span>I reviewed and adjusted the controls and risk scores for the actual work conditions.</span></label>';
   window.__safeSiteAiDraftPendingReview=true;
+  box.querySelectorAll('input[type="checkbox"]').forEach(x=>x.addEventListener('change',updateSubmitGate));
+  installSubmitGuard();
+  updateSubmitGate();
 }
 function reviewComplete(){
   if(!window.__safeSiteAiDraftPendingReview) return true;
   const hazards=[...document.querySelectorAll('.aiHazardReview')];
   return hazards.length>0 && hazards.every(x=>x.checked) && !!byId('aiControlsRiskReviewed')?.checked;
+}
+
+function submitButton(){
+  return [...document.querySelectorAll('button')].find(b=>/Submit Pre-Task Risk Assessment/i.test(b.textContent||''));
+}
+function updateSubmitGate(){
+  const b=submitButton(); if(!b)return;
+  const locked=!!window.__safeSiteAiDraftPendingReview && !reviewComplete();
+  b.disabled=locked;
+  b.style.opacity=locked?'0.45':'';
+  b.style.cursor=locked?'not-allowed':'';
+  b.title=locked?'Complete Supervisor AI Draft Review before submitting':'';
+}
+function installSubmitGuard(){
+  const b=submitButton();
+  if(!b||b.dataset.aiGuard==='1')return;
+  b.dataset.aiGuard='1';
+  b.addEventListener('click',function(e){
+    if(window.__safeSiteAiDraftPendingReview && !reviewComplete()){
+      e.preventDefault();e.stopImmediatePropagation();
+      status('Complete the Supervisor AI Draft Review before submitting this assessment.',true);
+      byId('aiSupervisorReview')?.scrollIntoView({behavior:'smooth',block:'center'});
+      if(typeof toast==='function')toast('Supervisor review is required');
+    }
+  },true);
 }
 function applyDraft(draft,source){
   const hazards=unique(draft?.hazards||[]), controls=unique(draft?.controls||[]);
@@ -116,6 +144,7 @@ window.generateAIRiskAssessment=async function(){
   const b=byId('aiRiskGenerateBtn');
   if(b){b.disabled=true;b.textContent='Generating AI draft...';}
   window.__safeSiteAiDraftPendingReview=false;
+  updateSubmitGate();
   status('Safe Site AI is reviewing the task and work context...');
   showQuestions([]);
   byId('aiSupervisorReview')?.remove();
@@ -157,6 +186,8 @@ function install(){
     const a=s.closest('label')||s;a.insertAdjacentElement('afterend',b);b.insertAdjacentElement('afterend',note);
   }
   wrapSubmit();
+  installSubmitGuard();
+  updateSubmitGate();
 }
 document.addEventListener('DOMContentLoaded',install);window.addEventListener('load',install);setTimeout(install,500);setTimeout(wrapSubmit,1200);
 })();
