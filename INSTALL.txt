@@ -1,4 +1,18 @@
-Upload qualification-duplicate-fix.js to the repository root.
-Then add this immediately before </body> in index.html:
-<script src="qualification-duplicate-fix.js?v=20260911a"></script>
-Commit and let Vercel deploy.
+SAFE SITE - WORKER PASSPORT EXPIRY DISPLAY FIX
+
+1. Upload worker-passport-expiry-display-fix.js to the root of the Safe-Site GitHub repository.
+2. Open index.html.
+3. Immediately before </body>, add:
+
+<script src="worker-passport-expiry-display-fix.js?v=20260911a"></script>
+
+4. Commit.
+5. Wait for Vercel to deploy and refresh Safe Site.
+
+Expected result:
+Test Worker > First aid should display:
+Expires Sep 20, 2027
+instead of:
+No expiry
+
+This fix changes display only. It does not modify qualification data.
