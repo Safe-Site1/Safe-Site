@@ -1,8 +1,6 @@
 /* Safe Site - Role-Based Access Control v4 */
 (function(){
-'use strict';
-
-const role=()=>String(window.db?.settings?.role||'').toLowerCase().replaceAll(' ','_');
+const role=()=>String((typeof db!=='undefined'&&db?.settings?.role)||'').toLowerCase().replaceAll(' ','_');
 const has=(...roles)=>roles.includes(role());
 const isAdmin=()=>has('administrator');
 const isStaff=()=>has('administrator','supervisor','safety_coordinator');
