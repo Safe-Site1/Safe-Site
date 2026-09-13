@@ -1,9 +1,8 @@
-Safe Site AI Risk Assessment v3.4
+Safe Site — Role-Based Access Control v4
 
-Audit-quality fix:
-- Final supervisor-reviewed hazards and controls are now split only on line breaks.
-- Commas inside a hazard/control sentence are preserved exactly.
-- Original AI draft, supervisor review gate, residual-risk stop-work gate,
-  stop-work history, timestamps and audit_log behavior remain unchanged.
+1. Upload role-access-v4.js to the root of the Safe-Site GitHub repository.
+2. In index.html, immediately AFTER the existing team-permissions.js script tag, add:
+   <script src="role-access-v4.js?v=20260912a"></script>
+3. Commit to main.
 
-Replace ai-risk-assessment.js in GitHub and commit to main.
+Backend safety-record RLS lockdown has already been applied in Supabase.
