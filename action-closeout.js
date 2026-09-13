@@ -91,7 +91,8 @@ function makeReportActionsTappable(){
     if(typeof reportTab!=='undefined'&&reportTab==='actions'){
       document.querySelectorAll('#reportsBody .item').forEach(el=>{
         const title=el.querySelector('b')?.textContent?.trim();
-        const a=db.actions.find(x=>x.description===title&&x.site===db.settings.site);
+        const matches=db.actions.filter(x=>x.description===title&&x.site===db.settings.site);
+const a=matches.find(x=>x.status!=='closed')||matches[0];
         if(a){el.classList.add('actionTap');el.onclick=()=>openActionDetail(a.id);}
       });
     }
@@ -103,7 +104,8 @@ function makeActionScreenTappable(){
   window.__actionCloseoutActionsWrapped=true;
   const base=window.renderActions;
   window.renderActions=function(){base();document.querySelectorAll('#actionsList .actionCard').forEach(card=>{
-    const title=card.querySelector('b')?.textContent?.trim();const a=db.actions.find(x=>x.description===title&&x.site===db.settings.site);
+    const matches=db.actions.filter(x=>x.description===title&&x.site===db.settings.site);
+const a=matches.find(x=>x.status!=='closed')||matches[0];
     if(a){card.classList.add('actionTap');card.addEventListener('click',e=>{if(e.target.closest('button'))return;openActionDetail(a.id);});}
   });};
 }
