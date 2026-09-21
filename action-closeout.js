@@ -103,10 +103,10 @@ function makeActionScreenTappable(){
   if(typeof window.renderActions!=='function'||window.__actionCloseoutActionsWrapped)return;
   window.__actionCloseoutActionsWrapped=true;
   const base=window.renderActions;
-  window.renderActions=function(){base();document.querySelectorAll('#actionsList .actionCard').forEach(card=>{
-    const matches=db.actions.filter(x=>x.description===title&&x.site===db.settings.site);
-const a=matches.find(x=>x.status!=='closed')||matches[0];
-    if(a){card.classList.add('actionTap');card.addEventListener('click',e=>{if(e.target.closest('button'))return;openActionDetail(a.id);});}
+  window.renderActions=function(){base();document.querySelectorAll('#actionsList .actionCard').forEach((card,index)=>{
+    const visible=db.actions.filter(x=>x.site===db.settings.site);
+    const a=visible[index];
+    if(a){card.dataset.actionId=String(a.id);card.classList.add('actionTap');card.addEventListener('click',e=>{if(e.target.closest('button'))return;openActionDetail(card.dataset.actionId);});}
   });};
 }
 
