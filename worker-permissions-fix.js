@@ -3,7 +3,7 @@
   'use strict';
 
   function roleKey() {
-    return String(window.db?.settings?.role || '')
+    return String((typeof db !== 'undefined' && db.settings?.role) || '')
       .toLowerCase()
       .replaceAll(' ', '_');
   }
@@ -17,7 +17,6 @@
 
     // Hide management navigation.
     [
-      'n-workers',
       'n-reports',
       'n-admin'
     ].forEach(id => {
@@ -36,4 +35,19 @@
 
     // Hide management-only buttons by label.
     document.querySelectorAll('button').forEach(button => {
-      const text = button.textContent.trim().
+      const text = button.textContent.trim().toLowerCase();
+      if (['team & permissions', 'manage tasks', 'close action', 'manage corrective actions']
+        .some(label => text.includes(label))) button.style.display = 'none';
+    });
+  }
+
+  // Keep the Workers entry available for the existing My Passport renderer.
+  const previousShow = window.show;
+  window.show = function () {
+    const result = previousShow.apply(this, arguments);
+    setTimeout(applyWorkerPermissions, 0);
+    return result;
+  };
+  window.addEventListener('load', applyWorkerPermissions);
+  setInterval(applyWorkerPermissions, 2000);
+})();

@@ -1,18 +1,31 @@
 /* Safe Site - Invitation Bootstrap Guard v1 */
 (function(){
 'use strict';
-const token=()=>new URLSearchParams(location.search).get('invite');
+const storageKey='safeSitePendingInvitation';
+// Capture before sign-up can send the user away to confirm their email.
+const urlToken=new URLSearchParams(location.search).get('invite');
+if(urlToken) localStorage.setItem(storageKey,urlToken);
+const token=()=>localStorage.getItem(storageKey);
 const originalEnsure=window.ensureCloudTenant;
 const originalRestore=window.restoreSession;
+let accepting=null;
 async function acceptInviteFirst(){
   const t=token(); if(!t)return false;
-  const client=initSupabase();
-  const {data:{user}}=await client.auth.getUser();
-  if(!user)return false;
-  const {error}=await client.rpc('accept_team_invitation',{p_token:t});
-  if(error)throw error;
-  history.replaceState({},'',location.pathname);
-  return true;
+  if(accepting)return accepting;
+  accepting=(async()=>{
+    const client=initSupabase();
+    const {data:{user},error:authError}=await client.auth.getUser();
+    if(authError)throw authError;
+    if(!user)return false;
+    const {error}=await client.rpc('accept_team_invitation',{p_token:t});
+    if(error)throw error;
+    if(token()===t)localStorage.removeItem(storageKey);
+    const url=new URL(location.href);
+    if(url.searchParams.get('invite')===t)url.searchParams.delete('invite');
+    history.replaceState({},'',url.pathname+url.search+url.hash);
+    return true;
+  })();
+  try{return await accepting;}finally{accepting=null;}
 }
 window.ensureCloudTenant=async function(){
   if(token()){
@@ -41,5 +54,8 @@ window.restoreSession=async function(){
     if(status)status.textContent=e.message||'Safe Site could not accept this invitation.';
   }
 };
-window.SafeSiteInvitationGuard={version:'1.0'};
+// app.js registered the original function before this script was loaded.
+window.removeEventListener('load',originalRestore);
+window.addEventListener('load',()=>window.restoreSession());
+window.SafeSiteInvitationGuard={version:'2.0',token,accept:acceptInviteFirst};
 })();

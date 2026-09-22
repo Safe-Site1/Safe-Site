@@ -87,7 +87,7 @@ hr{border:0;border-top:1px solid #1f3a46}
     </section>
 
     <section id="dashboard" class="screen hidden">
-      <h1>Good Morning</h1>
+      <h1 id="dashboardGreeting">Welcome</h1>
       <p class="muted">Safer people. Stronger sites.</p>
       <div class="card">
         <div class="row"><div class="grow"><b id="companyCtx"></b><div id="roleCtx" class="small muted"></div></div><span id="complianceBadge" class="badge ok"></span></div>
@@ -186,8 +186,8 @@ hr{border:0;border-top:1px solid #1f3a46}
         <button id="manageTaskBtn" class="btn secondary" onclick="show('taskLibrary')">⚙ Manage Task Library</button>
         <label>Primary Hazards<textarea id="flraHazards"></textarea></label>
         <label>Controls<textarea id="flraControls"></textarea></label>
-        <label>Work Area<input id="flraArea" value="Level 420 – East Drift"></label>
-        <label>Crew Acknowledgement<input id="flraCrew" placeholder="John Smith, Sarah Johnson"></label>
+        <label>Work Area<input id="flraArea" required placeholder="Enter the actual work area"></label>
+        <label>Crew Acknowledgement<input id="flraCrew" placeholder="Names of participating crew members"></label>
         <button class="btn" onclick="submitFLRA()">Submit FLRA</button>
       </div>
     </section>
@@ -199,7 +199,7 @@ hr{border:0;border-top:1px solid #1f3a46}
       <div class="notice small">Uses a demo 5×5 risk matrix. Company/site risk criteria should be configured to match your approved procedure before real-world use.</div>
       <div class="card">
         <label>Task<select id="praTask" onchange="loadRiskTaskTemplate()"></select></label>
-        <label>Work Area<input id="praArea" value="Level 420 – East Drift"></label>
+        <label>Work Area<input id="praArea" placeholder="Enter the actual work area"></label>
         <label>Hazards<textarea id="praHazards"></textarea></label>
         <div class="section">Initial Risk</div>
         <label>Likelihood<select id="praInitialLikelihood" onchange="updateRiskScores()"><option value="1">1 - Rare</option><option value="2">2 - Unlikely</option><option value="3" selected>3 - Possible</option><option value="4">4 - Likely</option><option value="5">5 - Almost Certain</option></select></label>
@@ -210,8 +210,8 @@ hr{border:0;border-top:1px solid #1f3a46}
         <label>Likelihood<select id="praResidualLikelihood" onchange="updateRiskScores()"><option value="1">1 - Rare</option><option value="2" selected>2 - Unlikely</option><option value="3">3 - Possible</option><option value="4">4 - Likely</option><option value="5">5 - Almost Certain</option></select></label>
         <label>Severity<select id="praResidualSeverity" onchange="updateRiskScores()"><option value="1">1 - Minor</option><option value="2">2 - Moderate</option><option value="3" selected>3 - Serious</option><option value="4">4 - Major</option><option value="5">5 - Catastrophic</option></select></label>
         <div id="praResidualResult" class="notice"></div>
-        <label>Supervisor Sign-off<input id="praSupervisor" value="Demo Supervisor"></label>
-        <label>Crew Acknowledgement<input id="praCrew" placeholder="John Smith, Sarah Johnson"></label>
+        <label>Supervisor Sign-off<input id="praSupervisor" placeholder="Supervisor name"></label>
+        <label>Crew Acknowledgement<input id="praCrew" placeholder="Names of participating crew members"></label>
         <button class="btn" onclick="submitRiskAssessment()">Submit Pre-Task Risk Assessment</button>
       </div>
     </section>
@@ -221,11 +221,11 @@ hr{border:0;border-top:1px solid #1f3a46}
       <h1>Pre-Shift</h1>
       <div class="card">
         <label>Crew<select id="psCrew"><option>Development Crew A</option><option>Construction Crew B</option><option>Service Crew</option></select></label>
-        <label>Work Area<input id="psArea" value="Level 420 – East Drift"></label>
+        <label>Work Area<input id="psArea" placeholder="Enter the actual work area"></label>
         <label>Task<select id="psTask"></select></label>
         <label>Hazards<textarea id="psHazards"></textarea></label>
         <label>Controls<textarea id="psControls"></textarea></label>
-        <label>Supervisor Sign-off<input id="psSupervisor" value="Demo Supervisor"></label>
+        <label>Supervisor Sign-off<input id="psSupervisor" placeholder="Supervisor name"></label>
         <button class="btn" onclick="submitPreShift()">Submit Pre-Shift</button>
       </div>
     </section>
@@ -321,10 +321,10 @@ hr{border:0;border-top:1px solid #1f3a46}
 <div id="buildMarker" style="display:none">pilot-polish-rebuild-20260909b</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=20260909b"></script>
-<script src="invitation-bootstrap-guard.js?v=20260920a"></script>
+<script src="app.js?v=20260922a"></script>
+<script src="invitation-bootstrap-guard.js?v=20260922a"></script>
   <script src="pilot-management.js?v=20260909b"></script>
-<script src="team-permissions.js?v=20260909c"></script>
+<script src="team-permissions.js?v=20260922a"></script>
   <script src="role-access-v4.js?v=20260912a"></script>
 <script src="action-closeout.js?v=20260909d"></script>
 <script src="worker-pass-documents.js?v=20260909e"></script>
@@ -337,7 +337,7 @@ hr{border:0;border-top:1px solid #1f3a46}
 <script src="cloud-expiry-fix.js?v=20260910b"></script>
   <script src="Safe-Site-expiry-dashboard-cleanup.js?v=20260910a"></script>
 <script src="audit-permissions-fix.js?v=20260910a"></script>
-<script src="worker-permissions-fix.js?v=20260910a"></script>
+<script src="worker-permissions-fix.js?v=20260922a"></script>
 <script src="document-view-fix.js?v=20260910a"></script>
 <script src="qualification-requirements.js?v=20260910a"></script>
 <script src="qualification-requirements-reliability.js?v=20260913a"></script>

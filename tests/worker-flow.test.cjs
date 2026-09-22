@@ -1,0 +1,186 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const vm=require('node:vm');
+const root=path.join(__dirname,'..');
+const source=name=>fs.readFileSync(path.join(root,name),'utf8');
+
+function fixture({storage=new Map(),url='https://safe-site.test/',hour=9}={}){
+  const elements=new Map(),listeners=new Map(),queries=[],saved=[],messages=[];
+  const element=id=>{
+    if(!elements.has(id))elements.set(id,{id,value:'',style:{},textContent:'',className:'',
+      classList:{add(){},remove(){},toggle(){},contains(){return false;}},
+      focus(){this.focused=true;},querySelectorAll(){return [];},appendChild(){},
+      set innerHTML(html){this.html=html;if(/Task$/.test(id))this.value=html.match(/<option value="([^"]*)"/)?.[1]||'';},
+      get innerHTML(){return this.html||'';}});
+    return elements.get(id);
+  };
+  const location=new URL(url);
+  class Clock extends Date{getHours(){return hour;}}
+  const ctx=vm.createContext({console:{error(){}},URL,URLSearchParams,Date:Clock,crypto:require('node:crypto'),
+    navigator:{onLine:true},location,history:{replaceState(a,b,next){location.href=new URL(next,location).href;}},
+    localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},
+    document:{getElementById:element,querySelectorAll:()=>[],querySelector:()=>null,createElement:()=>element('new')},
+    setTimeout:()=>0,setInterval:()=>0,scrollTo(){},
+    addEventListener(type,fn){if(!listeners.has(type))listeners.set(type,new Set());listeners.get(type).add(fn);},
+    removeEventListener(type,fn){listeners.get(type)?.delete(fn);},
+  });
+  ctx.window=ctx;
+  for(const match of source('index.html').matchAll(/id="([^"]+)"/g))ctx[match[1]]=element(match[1]);
+  const run=code=>vm.runInContext(code,ctx);
+  const load=name=>run(source(name));
+  load('app.js');
+  ctx.toast=msg=>messages.push(msg);
+  ctx.show=id=>{ctx.lastScreen=id;};
+  ctx.logAudit=()=>{};
+  ctx.loadCloudSafetyData=async()=>{};
+  ctx.saveCloudSafetyRecord=async(...args)=>{saved.push(args);return {id:'record'};};
+  const client={auth:{getUser:async()=>({data:{user:{id:'worker'}}}),getSession:async()=>({data:{session:null}})},
+    rpc:async()=>({error:null}),from(table){
+      const query={table,filters:[],select(columns){this.columns=columns;return this;},eq(...args){this.filters.push(args);return this;},
+        or(filter){this.scope=filter;return this;},order(column){this.orderBy=column;queries.push(this);return client.result(this);}};
+      return query;
+    },result:async()=>({data:[],error:null})};
+  ctx.initSupabase=()=>client;
+  run("cloudOrganizationId='org';cloudSiteIds={A:'site-a',B:'site-b'};db.settings.site='A';db.settings.role='Worker';");
+  return {ctx,run,load,client,queries,saved,messages,element,listeners,storage,location};
+}
+const task={id:'cloud-uuid',name:'Site task <test>',category:'Mining',
+  task_template_hazards:[{hazard:'Second',sort_order:2},{hazard:'First',sort_order:1}],
+  task_template_controls:[{control:'Control B',sort_order:2},{control:'Control A',sort_order:1}]};
+async function ready(f){f.client.result=async()=>({data:[task],error:null});await f.ctx.loadCloudTaskTemplates();}
+
+test('invitation survives sign-up confirmation, reload and failed acceptance; clears only on success',async()=>{
+  const storage=new Map();
+  const first=fixture({storage,url:'https://safe-site.test/?invite=token&view=welcome#confirm'});
+  first.load('invitation-bootstrap-guard.js');
+  first.load('team-permissions.js');
+  first.element('loginEmail').value='worker@example.test';first.element('loginPassword').value='test-password';
+  first.client.auth.signUp=async()=>({data:{session:null},error:null});
+  await first.ctx.createAccount();
+  assert.equal(storage.get('safeSitePendingInvitation'),'token');
+  const returned=fixture({storage,url:'https://safe-site.test/?view=welcome#confirm'});
+  let bootstraps=0;returned.ctx.ensureCloudTenant=async()=>bootstraps++;
+  returned.load('invitation-bootstrap-guard.js');
+  returned.client.rpc=async()=>({error:new Error('temporary failure')});
+  await assert.rejects(returned.ctx.ensureCloudTenant(),/temporary failure/);
+  assert.equal(storage.get('safeSitePendingInvitation'),'token');assert.equal(bootstraps,0);
+  let accepts=0;
+  returned.client.rpc=async(name,args)=>{assert.equal(name,'accept_team_invitation');assert.equal(args.p_token,'token');accepts++;return {error:null};};
+  await returned.ctx.ensureCloudTenant();
+  assert.equal(storage.has('safeSitePendingInvitation'),false);assert.equal(accepts,1);assert.equal(bootstraps,1);
+  assert.equal(returned.location.search,'?view=welcome');assert.equal(returned.location.hash,'#confirm');
+});
+
+test('guard replaces the registered restore handler and restores invitation before tenant bootstrap',async()=>{
+  const f=fixture({url:'https://safe-site.test/?invite=token&keep=yes'}),events=[];
+  const old=f.ctx.restoreSession;
+  f.ctx.ensureCloudTenant=async()=>events.push('tenant');
+  f.ctx.loadCloudContext=async()=>events.push('context');f.ctx.loadCloudWorkers=async()=>{};
+  f.ctx.openAuthenticatedApp=()=>events.push('open');
+  f.client.auth.getSession=async()=>({data:{session:{user:{id:'worker'}}}});
+  f.client.rpc=async()=>{events.push('accept');return {error:null};};
+  f.load('invitation-bootstrap-guard.js');
+  assert.equal(f.listeners.get('load').has(old),false);
+  for(const handler of f.listeners.get('load'))await handler();
+  assert.deepEqual(events,['accept','tenant','context','open']);
+  assert.equal(f.location.search,'?keep=yes');
+});
+
+test('login and tenant guard share one acceptance; concurrent acceptance is deduplicated',async()=>{
+  const f=fixture({url:'https://safe-site.test/?invite=token'});let accepts=0;
+  f.ctx.ensureCloudTenant=async()=>{};f.ctx.loadCloudContext=async()=>{};f.ctx.loadCloudWorkers=async()=>{};f.ctx.openAuthenticatedApp=()=>{};
+  f.client.auth.signInWithPassword=async()=>({data:{user:{id:'worker'}},error:null});
+  f.client.rpc=async()=>{accepts++;return {error:null};};
+  f.load('invitation-bootstrap-guard.js');f.load('team-permissions.js');
+  f.element('loginEmail').value='worker@example.test';f.element('loginPassword').value='test-password';
+  await f.ctx.login();assert.equal(accepts,1);
+  f.storage.set('safeSitePendingInvitation','next');
+  await Promise.all([f.ctx.SafeSiteInvitationGuard.accept(),f.ctx.SafeSiteInvitationGuard.accept()]);
+  assert.equal(accepts,2);
+});
+
+test('unauthenticated invitation is retained and cannot bootstrap a tenant',async()=>{
+  const f=fixture({url:'https://safe-site.test/?invite=token'});
+  f.load('invitation-bootstrap-guard.js');f.client.auth.getUser=async()=>({data:{user:null}});
+  await assert.rejects(f.ctx.ensureCloudTenant(),/Sign in required/);
+  assert.equal(f.storage.get('safeSitePendingInvitation'),'token');
+});
+
+test('tasks come from active org/site including shared templates, with ordered children and escaped names',async()=>{
+  const f=fixture();assert.equal(f.run('db.tasks.length'),0);await ready(f);
+  assert.equal(f.queries[0].table,'task_templates');
+  assert.deepEqual(f.queries[0].filters,[['organization_id','org'],['active',true]]);
+  assert.equal(f.queries[0].scope,'site_id.eq.site-a,site_id.is.null');
+  assert.match(f.queries[0].columns,/task_template_hazards\(hazard,sort_order\)/);
+  assert.match(f.queries[0].columns,/task_template_controls\(control,sort_order\)/);
+  for(const prefix of ['flra','pra','ps']){
+    assert.equal(f.element(prefix+'Hazards').value,'First\nSecond');
+    assert.equal(f.element(prefix+'Controls').value,'Control A\nControl B');
+    assert.match(f.element(prefix+'Task').innerHTML,/&lt;test&gt;/);
+  }
+});
+
+test('cached demo tasks are ignored; empty/error loads clear previous task details and block submission',async()=>{
+  const storage=new Map([['safeSiteRC',JSON.stringify({settings:{site:'A'},tasks:[{id:1,name:'Demo'}]})]]);
+  const f=fixture({storage});assert.equal(f.run('db.tasks.length'),0);
+  await ready(f);f.client.result=async()=>({data:[],error:null});await f.ctx.loadCloudTaskTemplates();
+  assert.equal(f.element('flraHazards').value,'');assert.match(f.element('flraTask').innerHTML,/No active tasks/);
+  await ready(f);f.client.result=async()=>({error:new Error('denied')});await f.ctx.loadCloudTaskTemplates();
+  assert.equal(f.run('db.tasks.length'),0);assert.equal(f.element('flraControls').value,'');
+  f.element('flraArea').value='Actual area';await f.ctx.submitFLRA();assert.equal(f.saved.length,0);
+});
+
+test('site switch clears tasks immediately and ignores late responses from the previous site',async()=>{
+  const f=fixture(),pending=[];f.client.result=()=>new Promise(resolve=>pending.push(resolve));
+  const a=f.ctx.loadCloudTaskTemplates();
+  f.element('siteSwitcher').value='B';const b=f.ctx.switchSite();
+  assert.equal(f.run('db.tasks.length'),0);
+  pending[1]({data:[{...task,id:'site-b-task'}]});await b;
+  pending[0]({data:[task]});await a;
+  assert.equal(f.run('db.tasks[0].id'),'site-b-task');assert.equal(f.queries[1].scope,'site_id.eq.site-b,site_id.is.null');
+});
+
+test('missing active site cannot load another site or submit',async()=>{
+  const f=fixture();await ready(f);f.run('cloudSiteIds={};');await f.ctx.loadCloudTaskTemplates();
+  assert.equal(f.run('db.tasks.length'),0);assert.equal(f.queries.length,1);
+  f.element('flraArea').value='Actual area';await f.ctx.submitFLRA();assert.equal(f.saved.length,0);
+});
+
+test('Worker FLRA requires a nonblank Work Area and saves trimmed area with cloud task hazards/controls',async()=>{
+  const f=fixture();await ready(f);
+  for(const area of ['', '   ', '\n\t']){f.element('flraArea').value=area;await f.ctx.submitFLRA();}
+  assert.equal(f.saved.length,0);assert.equal(f.element('flraArea').focused,true);
+  f.element('flraArea').value='  North workshop  ';await f.ctx.submitFLRA();
+  assert.equal(f.saved.length,1);assert.equal(f.saved[0][2],'North workshop');assert.equal(f.saved[0][3],task.name);
+  assert.equal(f.saved[0][4].hazards,'First\nSecond');assert.equal(f.ctx.lastScreen,'dashboard');
+});
+
+test('Client Viewer cannot submit FLRA, and existing Worker/Client Viewer screen and task-edit guards hold',async()=>{
+  const f=fixture();await ready(f);f.run("db.settings.role='Client Viewer'");
+  f.element('flraArea').value='Actual area';await f.ctx.submitFLRA();assert.equal(f.saved.length,0);
+  f.load('role-access-v4.js');f.ctx.safeSitePermissions.refresh();
+  assert.equal(f.ctx.safeSitePermissions.canOpen('flra'),false);
+  assert.equal(f.ctx.safeSitePermissions.canOpen('reports'),true);
+  f.run("db.settings.role='Worker'");f.ctx.safeSitePermissions.refresh();
+  assert.equal(f.ctx.safeSitePermissions.canOpen('flra'),true);
+  for(const screen of ['admin','team','reports','taskLibrary','taskEditor','qualificationEditor'])assert.equal(f.ctx.safeSitePermissions.canOpen(screen),false);
+  const before=f.run('JSON.stringify(db.tasks)');f.ctx.saveTask();f.ctx.deleteTask();assert.equal(f.run('JSON.stringify(db.tasks)'),before);
+  f.load('worker-permissions-fix.js');
+  for(const handler of f.listeners.get('load')){if(handler!==f.ctx.restoreSession)handler();}
+  assert.equal(f.element('n-reports').style.display,'none');assert.equal(f.element('n-admin').style.display,'none');
+});
+
+for(const [hour,greeting] of [[0,'Good Morning'],[11,'Good Morning'],[12,'Good Afternoon'],[17,'Good Afternoon'],[18,'Good Evening'],[23,'Good Evening']]){
+  test(`dashboard greeting at ${hour}:00`,()=>{const f=fixture({hour});f.ctx.renderDashboard();assert.equal(f.element('dashboardGreeting').textContent,greeting);});
+}
+
+test('production forms have no demo area/person defaults; FLRA input is required',()=>{
+  for(const name of ['app.js','index.html','team-permissions.js'])assert.doesNotMatch(source(name),/(?:value|placeholder)="(?:Level 420 – East Drift|John Smith, Sarah Johnson|Demo Supervisor)"/);
+  assert.match(source('index.html'),/id="flraArea" required/);
+});
+
+test('all shipped JavaScript parses, including the worker permission module',()=>{
+  for(const name of fs.readdirSync(root).filter(name=>name.endsWith('.js')))new vm.Script(source(name),{filename:name});
+});

@@ -8,7 +8,7 @@ const esc=v=>String(v??'')
 
 const roleKey=()=>String(db?.settings?.role||'').toLowerCase().replaceAll(' ','_');
 const isAdmin=()=>roleKey()==='administrator';
-const inviteToken=()=>new URLSearchParams(location.search).get('invite');
+const inviteToken=()=>window.SafeSiteInvitationGuard.token();
 
 function addStyles(){
   if(document.getElementById('teamPermissionStylesV3')) return;
@@ -67,7 +67,7 @@ function ensureTeamScreens(){
       <h1>Invite Team Member</h1>
       <p class="muted">Create a secure 7-day invitation link.</p>
       <div class="card">
-        <label>Full Name<input id="inviteFullName" placeholder="Demo Supervisor"></label>
+        <label>Full Name<input id="inviteFullName" placeholder="Full name"></label>
         <label>Email<input id="inviteEmail" type="email" placeholder="supervisor@company.com"></label>
         <label>Role<select id="inviteRole">
           <option value="supervisor">Supervisor</option>
@@ -255,18 +255,7 @@ window.copyCreatedInvite=async function(){
 };
 
 async function acceptInvitationIfPresent(){
-  const token=inviteToken();
-  if(!token) return false;
-
-  const client=initSupabase();
-  const {data:{user}}=await client.auth.getUser();
-  if(!user) return false;
-
-  const {error}=await client.rpc('accept_team_invitation',{p_token:token});
-  if(error) throw error;
-
-  history.replaceState({},'',location.pathname);
-  return true;
+  return window.SafeSiteInvitationGuard.accept();
 }
 
 async function finishAuthenticated(){
@@ -328,7 +317,7 @@ window.createAccount=async function(){
 
   if(!data.session){
     status.textContent=inviteToken()
-      ? 'Account created. Confirm your email, then reopen this invitation link and sign in.'
+      ? 'Account created. Confirm your email, then return here and sign in. Your invitation is saved on this browser.'
       : 'Account created. Check your email for the confirmation link, then return here and sign in.';
     return;
   }

@@ -7,6 +7,9 @@ let supabaseClient = null;
 let cloudUser = null;
 let cloudOrganizationId = null;
 let cloudSiteIds = {};
+let taskLoadSequence = 0;
+let taskContext = null;
+let taskLoadState = 'idle';
 
 function initSupabase(){
   if(window.supabase && !supabaseClient){
@@ -85,7 +88,7 @@ function installRiskAssessmentUI(){
         <div class="notice small">Uses a demo 5×5 risk matrix. Company/site risk criteria should be configured to match your approved procedure before real-world use.</div>
         <div class="card">
           <label>Task<select id="praTask" onchange="loadRiskTaskTemplate()"></select></label>
-          <label>Work Area<input id="praArea" value="Level 420 – East Drift"></label>
+          <label>Work Area<input id="praArea" placeholder="Enter the actual work area"></label>
           <label>Hazards<textarea id="praHazards"></textarea></label>
           <div class="section">Initial Risk</div>
           <label>Likelihood<select id="praInitialLikelihood" onchange="updateRiskScores()"><option value="1">1 - Rare</option><option value="2">2 - Unlikely</option><option value="3" selected>3 - Possible</option><option value="4">4 - Likely</option><option value="5">5 - Almost Certain</option></select></label>
@@ -96,8 +99,8 @@ function installRiskAssessmentUI(){
           <label>Likelihood<select id="praResidualLikelihood" onchange="updateRiskScores()"><option value="1">1 - Rare</option><option value="2" selected>2 - Unlikely</option><option value="3">3 - Possible</option><option value="4">4 - Likely</option><option value="5">5 - Almost Certain</option></select></label>
           <label>Severity<select id="praResidualSeverity" onchange="updateRiskScores()"><option value="1">1 - Minor</option><option value="2">2 - Moderate</option><option value="3" selected>3 - Serious</option><option value="4">4 - Major</option><option value="5">5 - Catastrophic</option></select></label>
           <div id="praResidualResult" class="notice"></div>
-          <label>Supervisor Sign-off<input id="praSupervisor" value="Demo Supervisor"></label>
-          <label>Crew Acknowledgement<input id="praCrew" placeholder="John Smith, Sarah Johnson"></label>
+          <label>Supervisor Sign-off<input id="praSupervisor" placeholder="Supervisor name"></label>
+          <label>Crew Acknowledgement<input id="praCrew" placeholder="Names of participating crew members"></label>
           <button class="btn" onclick="submitRiskAssessment()">Submit Pre-Task Risk Assessment</button>
         </div>`;
       preshift.insertAdjacentElement('beforebegin',section);
@@ -110,11 +113,11 @@ function load(){
   const raw=localStorage.getItem('safeSiteRC');
   if(raw){
     const d=JSON.parse(raw);
-    d.tasks ||= deepCopy(seed.tasks); d.audit ||= []; d.offlineQueue ||= []; d.users ||= deepCopy(seed.users);
+    d.tasks = []; d.audit ||= []; d.offlineQueue ||= []; d.users ||= deepCopy(seed.users);
     d.sites ||= deepCopy(seed.sites); d.actions ||= []; d.records ||= []; d.workers ||= [];
     return d;
   }
-  return deepCopy(seed);
+  return {...deepCopy(seed),tasks:[]};
 }
 function persist(){ localStorage.setItem('safeSiteRC',JSON.stringify(db)); }
 
@@ -197,12 +200,58 @@ async function loadCloudContext(){
   if(oe) throw oe; if(se) throw se;
   db.settings.company=org.name;
   db.settings.role=pretty(m.role);
-  if(sites?.length){
-    db.sites=sites.map(x=>x.name);
-    cloudSiteIds=Object.fromEntries(sites.map(x=>[x.name,x.id]));
-    if(!db.sites.includes(db.settings.site)) db.settings.site=db.sites[0];
-  }
+  db.sites=(sites||[]).map(x=>x.name);
+  cloudSiteIds=Object.fromEntries((sites||[]).map(x=>[x.name,x.id]));
+  if(!db.sites.includes(db.settings.site)) db.settings.site=db.sites[0]||'';
+  await loadCloudTaskTemplates();
   persist();
+}
+
+async function loadCloudTaskTemplates(){
+  const request=++taskLoadSequence;
+  const organizationId=cloudOrganizationId, siteId=currentCloudSiteId();
+  db.tasks=[];
+  taskContext=null;
+  taskLoadState='loading';
+  refreshTaskForms();
+  if(!organizationId||!siteId){taskLoadState='unavailable';refreshTaskForms();return;}
+  try{
+    const {data,error}=await initSupabase().from('task_templates')
+      .select('id,name,category,task_template_hazards(hazard,sort_order),task_template_controls(control,sort_order)')
+      .eq('organization_id',organizationId).eq('active',true)
+      .or(`site_id.eq.${siteId},site_id.is.null`).order('name');
+    if(error)throw error;
+    // A slow response from a previous site/session must never replace this site's tasks.
+    if(request!==taskLoadSequence||organizationId!==cloudOrganizationId||siteId!==currentCloudSiteId())return;
+    const ordered=(rows,key)=>(rows||[]).slice().sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(row=>row[key]);
+    db.tasks=(data||[]).map(t=>({id:t.id,name:t.name,category:t.category||'',
+      hazards:ordered(t.task_template_hazards,'hazard'),controls:ordered(t.task_template_controls,'control')}));
+    taskContext={organizationId,siteId};
+    taskLoadState='ready';
+  }catch(e){
+    if(request!==taskLoadSequence)return;
+    taskLoadState='error';
+    console.error('Task templates could not load',e);
+    toast('Task templates could not load. Re-select your site to retry.');
+  }
+  refreshTaskForms();
+}
+
+function taskTemplatesReady(){
+  return taskLoadState==='ready'&&taskContext?.organizationId===cloudOrganizationId&&taskContext?.siteId===currentCloudSiteId();
+}
+function taskOptions(){
+  const escape=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+  if(!taskTemplatesReady()||!db.tasks.length){
+    const message=taskLoadState==='loading'?'Loading tasks…':taskLoadState==='error'?'Tasks unavailable — re-select site to retry':'No active tasks for this site';
+    return `<option value="">${message}</option>`;
+  }
+  return db.tasks.map(t=>`<option value="${escape(t.id)}">${escape(t.name)}</option>`).join('');
+}
+function refreshTaskForms(){
+  if(document.getElementById('flraTask'))prepFLRA();
+  if(document.getElementById('praTask'))prepRiskAssessment();
+  if(document.getElementById('psTask'))prepPreShift();
 }
 
 async function loadCloudWorkers(){
@@ -327,6 +376,7 @@ function openAuthenticatedApp(){
 async function signOut(){
   if(initSupabase()) await supabaseClient.auth.signOut();
   cloudUser=null; cloudOrganizationId=null; cloudSiteIds={};
+  ++taskLoadSequence; db.tasks=[]; taskContext=null; taskLoadState='idle';
   header.classList.add('hidden'); nav.classList.add('hidden');
   document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
   document.getElementById('login').classList.remove('hidden');
@@ -416,10 +466,17 @@ function pretty(x){ return String(x).replaceAll('_',' ').replace(/\b\w/g,m=>m.to
 function populateSiteSwitcher(){
   siteSwitcher.innerHTML=db.sites.map(s=>`<option ${s===db.settings.site?'selected':''}>${s}</option>`).join('');
 }
-function switchSite(){ db.settings.site=siteSwitcher.value; persist(); show('dashboard'); }
+async function switchSite(){
+  db.settings.site=siteSwitcher.value;
+  const loading=loadCloudTaskTemplates();
+  persist(); show('dashboard');
+  await loading;
+}
 function currentWorkers(){ return db.workers.filter(w=>w.site===db.settings.site); }
 
 function renderDashboard(){
+  const hour=new Date().getHours();
+  document.getElementById('dashboardGreeting').textContent=hour<12?'Good Morning':hour<18?'Good Afternoon':'Good Evening';
   const workers=currentWorkers();
   const ready=workers.filter(w=>workerStatus(w)==='compliant').length;
   const exp=workers.filter(w=>workerStatus(w)==='expiring').length;
@@ -500,12 +557,12 @@ function prepFLRA(){
 }
 function populateTaskSelect(){
   const selected=flraTask.value;
-  flraTask.innerHTML=db.tasks.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+  flraTask.innerHTML=taskOptions();
   if(selected && db.tasks.some(t=>String(t.id)===String(selected))) flraTask.value=selected;
 }
 function loadTaskTemplate(){
-  const t=db.tasks.find(x=>String(x.id)===String(flraTask.value)); if(!t)return;
-  flraHazards.value=t.hazards.join('\n'); flraControls.value=t.controls.join('\n');
+  const t=db.tasks.find(x=>String(x.id)===String(flraTask.value));
+  flraHazards.value=t?.hazards.join('\n')||''; flraControls.value=t?.controls.join('\n')||'';
 }
 function renderTaskLibrary(){
   const q=(taskSearch.value||'').toLowerCase(); taskLibraryList.innerHTML='';
@@ -525,7 +582,7 @@ function saveTask(){
   const name=editTaskName.value.trim(); if(!name){toast('Task name is required');return}
   const obj={name,category:editTaskCategory.value,hazards:editTaskHazards.value.split('\n').map(x=>x.trim()).filter(Boolean),controls:editTaskControls.value.split('\n').map(x=>x.trim()).filter(Boolean)};
   if(editingTaskId){Object.assign(db.tasks.find(t=>t.id===editingTaskId),obj);logAudit('updated','task template',name)}
-  else{obj.id=Math.max(0,...db.tasks.map(t=>t.id||0))+1;db.tasks.push(obj);logAudit('created','task template',name)}
+  else{obj.id=crypto.randomUUID();db.tasks.push(obj);logAudit('created','task template',name)}
   saveAndQueue('task',obj);toast('Task saved');show('taskLibrary');
 }
 function deleteTask(){
@@ -533,10 +590,16 @@ function deleteTask(){
   const t=db.tasks.find(x=>x.id===editingTaskId);db.tasks=db.tasks.filter(x=>x.id!==editingTaskId);logAudit('deleted','task template',t?.name||'');persist();toast('Task deleted');show('taskLibrary');
 }
 async function submitFLRA(){
+  if(!['Administrator','Supervisor','Safety Coordinator','Worker'].includes(db.settings.role)){
+    toast('Your role does not have permission for that action');return;
+  }
+  const area=flraArea.value.trim();
+  if(!area){toast('Enter the actual Work Area before submitting');flraArea.focus();return;}
   const t=db.tasks.find(x=>String(x.id)===String(flraTask.value));
-  const details={area:flraArea.value,hazards:flraHazards.value,controls:flraControls.value,crew:flraCrew.value};
+  if(!taskTemplatesReady()||!t){toast('Select an active task for this site before submitting');return;}
+  const details={area,hazards:flraHazards.value,controls:flraControls.value,crew:flraCrew.value};
   try{
-    const row=await saveCloudSafetyRecord('flra',t?.name||'Custom Task',flraArea.value,t?.name||'Custom Task',details);
+    const row=await saveCloudSafetyRecord('flra',t.name,area,t.name,details);
     await loadCloudSafetyData();
     logAudit('submitted','FLRA',t?.name||'Custom Task');
     toast('FLRA saved to cloud');
@@ -566,14 +629,14 @@ function updateRiskScores(){
   praResidualResult.innerHTML=`<div class="row"><div class="grow"><b>Residual Risk</b><div class="small muted">Likelihood × Severity = ${residual}</div></div><span class="badge ${riskClass(residualLevel)}">${residualLevel}</span></div>`;
 }
 function prepRiskAssessment(){
-  praTask.innerHTML=db.tasks.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+  praTask.innerHTML=taskOptions();
   loadRiskTaskTemplate();
   updateRiskScores();
 }
 function loadRiskTaskTemplate(){
-  const t=db.tasks.find(x=>String(x.id)===String(praTask.value)); if(!t)return;
-  praHazards.value=t.hazards.join('\n');
-  praControls.value=t.controls.join('\n');
+  const t=db.tasks.find(x=>String(x.id)===String(praTask.value));
+  praHazards.value=t?.hazards.join('\n')||'';
+  praControls.value=t?.controls.join('\n')||'';
 }
 async function submitRiskAssessment(){
   const t=db.tasks.find(x=>String(x.id)===String(praTask.value));
@@ -609,8 +672,8 @@ async function submitRiskAssessment(){
   }
 }
 function prepPreShift(){
-  psTask.innerHTML=db.tasks.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
-  const t=db.tasks[0]; if(t){psHazards.value=t.hazards.join('\n');psControls.value=t.controls.join('\n')}
+  psTask.innerHTML=taskOptions();
+  const t=db.tasks[0]; psHazards.value=t?.hazards.join('\n')||'';psControls.value=t?.controls.join('\n')||'';
   psTask.onchange=()=>{const x=db.tasks.find(t=>String(t.id)===String(psTask.value));if(x){psHazards.value=x.hazards.join('\n');psControls.value=x.controls.join('\n')}};
 }
 async function submitPreShift(){
