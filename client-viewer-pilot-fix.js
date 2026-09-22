@@ -51,7 +51,7 @@ const previousShow=window.show;
 if(typeof previousShow==='function'&&!window.__clientViewerPolishWrapped){
  window.__clientViewerPolishWrapped=true;
  window.show=function(name){
-   if(['workerEditor','qualificationEditor','taskEditor','correctiveAction','preshift','flra','riskAssessment','inspection','incident','admin','team','teamInvite'].includes(name)){
+   if(isClient() && ['workerEditor','qualificationEditor','taskEditor','correctiveAction','preshift','flra','riskAssessment','inspection','incident','admin','team','teamInvite'].includes(name)){
      window.toast?.('Client Viewer has read-only access'); return previousShow('dashboard');
    }
    const r=previousShow.apply(this,arguments);setTimeout(apply,25);return r;
