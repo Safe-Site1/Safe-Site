@@ -228,7 +228,7 @@
           <div class="detailRow"><b>Title / Task</b><div>${esc(rec.title)}</div></div>
           <div class="detailRow"><b>Site</b><div>${esc(rec.site)}</div></div>
           <div class="detailRow"><b>Submitted</b><div>${esc(new Date(rec.time).toLocaleString())}</div></div>
-          ${Object.entries(details).filter(([k])=>k!=='taskTemplateId').map(([k,v])=>`<div class="detailRow"><b>${esc(detailLabel(k))}</b><div>${detailValue(v)}</div></div>`).join('')}
+          ${Object.entries(details).filter(([k])=>k!=='taskTemplateId').map(([k,v])=>`<div class="detailRow"><b>${esc(k==='photo'&&v?'Legacy photo filename (upload unverified)':detailLabel(k))}</b><div>${detailValue(v)}</div></div>`).join('')}
         </div>
       </div>
       <div class="section">Linked Corrective Actions</div>
@@ -239,6 +239,8 @@
             <div class="small muted">Due ${esc(a.due || 'No date')} · ${esc(detailLabel(a.priority || 'medium'))}</div>
           </div>`).join('') : '<div class="muted">No corrective actions linked to this record.</div>'}
       </div>`;
+    document.getElementById('recordDetailBody').insertAdjacentHTML('beforeend','<div id="recordPhotos" class="card"></div>');
+    window.renderRecordPhotos?.(rec.id);
     window.scrollTo(0,0);
   };
 

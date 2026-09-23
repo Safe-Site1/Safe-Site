@@ -6,6 +6,17 @@ const vm=require('node:vm');
 const root=path.join(__dirname,'..');
 const source=name=>fs.readFileSync(path.join(root,name),'utf8');
 
+test('photo uploads validate type, size and signatures and hash identical bytes consistently',async()=>{
+  const f=fixture();f.load('record-photos.js');
+  const bytes=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64');
+  const photo={type:'image/png',size:bytes.length,arrayBuffer:async()=>bytes};
+  const name=await f.ctx.SafeSitePhotos.photoInfo(photo);assert.match(name,/^[a-f0-9]{64}\.png$/);
+  assert.equal(await f.ctx.SafeSitePhotos.photoInfo(photo),name);
+  await assert.rejects(f.ctx.SafeSitePhotos.photoInfo({...photo,type:'image/svg+xml'}),/Choose a/);
+  await assert.rejects(f.ctx.SafeSitePhotos.photoInfo({...photo,size:10485761}),/10 MB/);
+  await assert.rejects(f.ctx.SafeSitePhotos.photoInfo({...photo,type:'image/jpeg'}),/contents do not match/);
+});
+
 test('reload restores the exact uncertain report and retires recovery after confirmation',async()=>{
   const session=new Map(),first=fixture({session});first.run("cloudUser={id:'worker'}");first.load('field-submissions.js');
   first.element('incType').value='Near Miss';first.element('incLocation').value='Bay';first.element('incDesc').value='Original';

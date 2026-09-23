@@ -20,7 +20,15 @@ const root=path.join(__dirname,'..');
     window.actions=[{id:'late',due_date:'2030-01-01',description:'LATE'},{id:'closed',due_date:'2020-01-01',description:'OLD',status:'closed'},
      {id:'early',due_date:'2021-01-01',description:'EARLY'}].map(a=>({organization_id:'org',site_id:'site',title:'Duplicate title',status:'open',priority:'high',created_at:'2026-01-01',...a}));
     window.patches=[];window.inserts=[];window.fieldCalls=JSON.parse(sessionStorage.getItem('mockFieldCalls')||'[]');window.fieldRecords=JSON.parse(sessionStorage.getItem('mockFieldRecords')||'[]');
-    window.testClient={auth:{getSession:async()=>({data:{session:null}})},async rpc(name,p){
+    window.storagePhotos=[];window.photoUploads=0;
+    window.testClient={storage:{from(){return {
+     async list(prefix,options){return {data:storagePhotos.filter(p=>!options?.search||p.name===options.search)};},
+     async upload(path,file,options){photoUploads++;if(window.rejectPhoto){window.rejectPhoto=false;return {error:{message:'Offline'}};}
+      const name=path.split('/').at(-1);if(!storagePhotos.some(p=>p.name===name))storagePhotos.push({name,created_at:new Date().toISOString()});
+      return {error:{message:'Response lost after upload'}};
+     },
+     async createSignedUrl(){return {data:{signedUrl:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='}};}
+    };}},auth:{getSession:async()=>({data:{session:null}})},async rpc(name,p){
      if(name!=='submit_field_record')return {data:null,error:null};
      fieldCalls.push(p);
      if(!fieldRecords.some(r=>r.id===p.p_id))fieldRecords.push({id:p.p_id,organization_id:p.p_organization_id,site_id:p.p_site_id,record_type:p.p_type,title:p.p_title,work_area:p.p_area,data:p.p_data,status:'submitted',created_at:new Date().toISOString()});
@@ -134,7 +142,24 @@ const root=path.join(__dirname,'..');
     await page.locator('#actionCloseoutNote').waitFor();
     assert.match(await page.locator('#actionDetailBody').innerText(),/LATE/);
    }
-   assert.deepEqual(errors,[]);console.log(`PASS: ${role} closeout flow`);await page.close();
+   await page.evaluate(async()=>{
+    fieldRecords.push({id:'photo-record',organization_id:'org',site_id:'site',record_type:'inspection',created_by:'pilot-user',title:'PILOT PHOTO TEST',work_area:'Test',data:{},status:'submitted',created_at:new Date().toISOString()});
+    await loadCloudSafetyData();await openRecordDetail('photo-record');
+   });
+   await page.locator('#recordPhotoList').waitFor();
+   if(role==='Client Viewer'){
+    assert.equal(await page.locator('#recordPhotoUpload').count(),0);await page.evaluate(()=>attachRecordPhoto());assert.equal(await page.evaluate(()=>photoUploads),0);
+   }else{
+    const png={name:'pilot.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64')};
+    await page.locator('#recordPhotoInput').setInputFiles(png);await page.evaluate(()=>{window.rejectPhoto=true;});
+    await page.locator('#recordPhotoUpload').click();await page.waitForFunction(()=>!document.getElementById('recordPhotoUpload').disabled);
+    assert.match(await page.locator('#recordPhotoMessage').innerText(),/not confirmed/);assert.equal(await page.evaluate(()=>storagePhotos.length),0);
+    await page.locator('#recordPhotoUpload').click();await page.waitForFunction(()=>document.getElementById('recordPhotoMessage').textContent.includes('saved securely'));
+    await page.locator('#recordPhotoInput').setInputFiles(png);await page.locator('#recordPhotoUpload').click();await page.waitForFunction(()=>!document.getElementById('recordPhotoUpload').disabled);
+    assert.equal(await page.evaluate(()=>storagePhotos.length),1);
+    await page.getByRole('button',{name:'View photo 1',exact:true}).click();assert.equal(await page.locator('#recordPhotoPreview img').count(),1);
+   }
+   assert.deepEqual(errors,[]);console.log(`PASS: ${role} field, closeout and photo flows`);await page.close();
   }
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

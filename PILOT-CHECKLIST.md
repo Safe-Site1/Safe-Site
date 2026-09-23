@@ -15,7 +15,7 @@
 
 ## Remaining before expanding the pilot
 
-- Photo evidence: actual file upload/storage and permission testing are still needed. Field forms now state that uploads are unavailable; historical filename values do not prove evidence was uploaded.
+- Photo evidence: private uploads and viewing from saved field reports are implemented; role restrictions, size/type validation and safe duplicate retries are tested. Historical filename values remain unverified. Test device-specific camera formats (HEIC is not supported), mobile upload behavior and retention requirements before broad rollout.
 - Recovery after closing the tab, clearing storage or signing out: tab recovery data is no longer available. Check Recent Activity before re-entering an uncertain submission. Cross-device/offline queue recovery remains future work.
 - Existing Supabase security advisories: review intentional public worker-pass lookup functions, authenticated privileged invitation/team functions, and leaked-password protection. No new advisory was introduced by the field-submission RPC.
 - Staff safety-record editing/deletion permissions outside the verified approval/closeout workflows need a separate audit-retention decision. The new RPC does not change existing table permissions or prevent all legacy/direct API writes.

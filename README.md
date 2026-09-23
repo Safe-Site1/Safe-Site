@@ -82,9 +82,21 @@ so check Recent Activity before re-entering an uncertain report in a new tab.
 If session storage cannot preserve a request, nothing is sent. Successful saves followed
 by refresh failures are explicitly reported as saved.
 
-Photo evidence uploads remain unavailable. The old forms saved only filenames;
-the upload controls are now hidden and this limitation is stated on each form.
-No previously stored records or filenames are changed.
+Photo evidence is attached from saved report details (open through Recent Activity
+or Reports). Apply `database/record_photos.sql` first, applied as
+`private_record_photo_evidence`. The private `record-photos` bucket accepts JPG,
+PNG and WebP up to 10 MB. Storage policies require a visible field report and active
+organization membership. Workers may attach to their own submitted reports; staff
+may attach within their organization; Client Viewers read only. No overwrite or
+delete policy is granted. A SHA-256 filename makes identical-file retries reuse
+the same photo. A failed upload leaves the saved report intact; after reload,
+reselect the same file to retry. Viewing generates a 60-second signed URL.
+Legacy filename-only entries are explicitly labeled unverified and are unchanged.
+
+`tests/record-photos-database.sql` checks private storage configuration and 16
+authorization cases with rollback fixtures. The browser suite checks upload failure,
+lost-response recovery, duplicate retries and viewing. File validation checks image
+signatures, type and size; it is not malware scanning or a full image decoder.
 
 `tests/field-submission-database.sql` runs 28 rollback assertions including a forced
 action-insert failure, replay checks, organization boundaries and Client Viewer
