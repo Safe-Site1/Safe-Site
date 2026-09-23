@@ -308,3 +308,27 @@ test('risk approval uses the risk record type and shares verified review display
   assert.doesNotMatch(source('index.html')+source('app.js'),/praSupervisor/);
   assert.match(source('index.html'),/id="praArea" required/);
 });
+
+test('only staff may change actions; closing always opens the required-note workflow',async()=>{
+  const f=fixture();let opened=0;f.ctx.openActionDetail=async()=>opened++;
+  f.run("db.actions=[{id:'a',status:'open'}]");
+  for(const role of ['Worker','Client Viewer']){f.run(`db.settings.role=${JSON.stringify(role)}`);await f.ctx.setAction('a','closed');}
+  assert.equal(opened,0);
+  for(const role of ['Supervisor','Administrator','Safety Coordinator']){f.run(`db.settings.role=${JSON.stringify(role)}`);await f.ctx.setAction('a','closed');}
+  assert.equal(opened,3);assert.equal(f.queries.length,0);
+});
+test('action detail is read-only for Worker/Client Viewer and closeout never reports denied updates as success',async()=>{
+  const f=fixture();f.load('action-closeout.js');f.ctx.confirm=()=>true;
+  let writes=0;
+  f.client.from=()=>{let patch;return {select(){return this;},eq(){return this;},update(value){writes++;patch=value;return this;},
+    single:async()=>patch?{data:null,error:new Error('No rows')}:{data:{id:'a',status:'open',title:'Action',created_at:new Date().toISOString()}}};};
+  for(const role of ['Worker','Client Viewer']){
+    f.run(`db.settings.role=${JSON.stringify(role)}`);await f.ctx.openActionDetail('a');
+    assert.doesNotMatch(f.element('actionDetailBody').innerHTML,/actionCloseoutSubmit/);
+    await f.ctx.completeActionCloseout('a');
+  }
+  assert.equal(writes,0);f.run("db.settings.role='Supervisor'");await f.ctx.openActionDetail('a');
+  f.element('actionCloseoutNote').value='  ';await f.ctx.completeActionCloseout('a');assert.equal(writes,0);
+  f.element('actionCloseoutNote').value='Verified test only';await f.ctx.completeActionCloseout('a');
+  assert.equal(writes,1);assert.match(f.messages.at(-1),/could not complete/);assert.equal(f.element('actionCloseoutNote').value,'Verified test only');
+});

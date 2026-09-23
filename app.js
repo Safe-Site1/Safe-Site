@@ -836,15 +836,21 @@ async function addAction(){
   }catch(e){console.error(e);toast('Corrective action could not save to cloud')}
 }
 async function setAction(id,status){
+  if(!canManageCorrectiveActions()){toast('Your role cannot change corrective actions');return;}
+  if(status==='closed')return window.openActionDetail?.(id);
+  if(status!=='in_progress')return;
   const a=db.actions.find(x=>String(x.id)===String(id));if(!a)return;
+  if(a.status!=='open'){toast('Refresh the action before changing its status');return;}
   const client=initSupabase();
-  const patch={status};
-  if(status==='closed') patch.closed_at=nowISO();
-  const {error}=await client.from('corrective_actions').update(patch).eq('id',id).eq('organization_id',cloudOrganizationId);
-  if(error){console.error(error);toast('Action could not update');return}
+  const {data:row,error}=await client.from('corrective_actions').update({status}).eq('id',id)
+    .eq('organization_id',cloudOrganizationId).eq('status','open').select('id,status').single();
+  if(error||!row){console.error(error);toast('Action could not update. Refresh and check your access.');return}
   await loadCloudSafetyData();
   logAudit('updated','corrective action',`${a.description}: ${status}`);
   renderActions();toast('Corrective action updated in cloud');
+}
+function canManageCorrectiveActions(){
+  return ['Administrator','Supervisor','Safety Coordinator'].includes(db.settings.role);
 }
 
 function setReportTab(tab,btn){

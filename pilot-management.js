@@ -287,7 +287,7 @@
       const rows = db.actions.filter(a=>a.site===db.settings.site)
         .slice().sort((a,b)=>(a.status==='closed')-(b.status==='closed') || String(a.due).localeCompare(String(b.due)));
       reportsBody.innerHTML = rows.length ? rows.map(a=>`
-        <div class="item">
+        <div class="item" data-action-id="${esc(a.id)}">
           <div class="row"><div class="grow"><b>${esc(a.description)}</b></div>${badge(a.status)}</div>
           <div class="small muted">${esc(a.owner)} · Due ${esc(a.due||'No date')} · ${esc(detailLabel(a.priority||'medium'))}${isOverdue(a)?' · OVERDUE':''}</div>
         </div>`).join('') : '<div class="muted">No actions.</div>';
@@ -309,7 +309,7 @@
     ensurePilotUI();
     const filter = document.getElementById('actionStatusFilter')?.value || 'active';
     let rows = db.actions.filter(a=>a.site===db.settings.site);
-    if(filter === 'active') rows = rows.filter(a=>a.status !== 'closed');
+    if(filter === 'active') rows = rows.filter(a=>['open','in_progress'].includes(a.status));
     else if(filter !== 'all') rows = rows.filter(a=>a.status === filter);
 
     rows.sort((a,b)=>{
@@ -319,7 +319,7 @@
     });
 
     actionsList.innerHTML = rows.length ? rows.map(a=>`
-      <div class="card actionCard ${isOverdue(a)?'overdue':''}">
+      <div class="card actionCard ${isOverdue(a)?'overdue':''}" data-action-id="${esc(a.id)}">
         <div class="row">
           <div class="grow">
             <b>${esc(a.description)}</b>
@@ -333,19 +333,17 @@
           ${a.safetyRecordId?'<span class="badge info">Linked Record</span>':''}
         </div>
         ${a.safetyRecordId ? `<button class="btn ghost" style="margin-top:10px" onclick="openRecordDetail('${esc(a.safetyRecordId)}')">View Source Record</button>` : ''}
-        ${a.status !== 'closed' ? `
+        ${['open','in_progress'].includes(a.status)&&canManageCorrectiveActions() ? `
           <div class="pilotActionButtons">
             <button onclick="setAction('${esc(a.id)}','in_progress')">Mark In Progress</button>
             <button onclick="closePilotAction('${esc(a.id)}')">Close Action</button>
-          </div>` : '<div class="notice small" style="margin-top:10px;margin-bottom:0">Closed</div>'}
+          </div>` : `<div class="notice small" style="margin-top:10px;margin-bottom:0">${esc(detailLabel(a.status))}</div>`}
       </div>`).join('') : '<div class="card emptyState">No corrective actions in this view.</div>';
   };
 
   window.closePilotAction = async function(id){
-    const a = db.actions.find(x=>String(x.id)===String(id));
-    if(!a) return;
-    if(!confirm(`Close corrective action?\n\n${a.description}`)) return;
-    await setAction(id,'closed');
+    if(!canManageCorrectiveActions()){toast('Your role cannot close corrective actions');return;}
+    return window.openActionDetail?.(id);
   };
 
   const baseRenderDashboard = window.renderDashboard;

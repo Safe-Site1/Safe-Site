@@ -41,6 +41,20 @@ retry; changing tasks/sites or signing out clears the draft. Historical audit ev
 are preserved and do not establish approval; only the verified safety-record fields
 above do so.
 
+## Verified corrective-action closeout
+
+Apply `database/corrective_action_closeout.sql` once before deploying the closeout
+UI (applied as `verified_corrective_action_closeout`). Every close button opens the
+same required-note workflow. Supabase assigns `closed_by` and `closed_at`; the
+browser sends only the note and closed status. Existing descriptions/source links
+are preserved. Closed records cannot be edited or reopened through updates.
+Existing staff deletion permissions are unchanged.
+
+Workers can still report/read actions from their own inspections, and Client Viewers
+remain read-only. Legacy closed actions retain their original history and are
+labeled as lacking a verified closer identity. Sorted/filtered lists and duplicate
+titles use action IDs so they open the correct source and closeout record.
+
 ## Tests
 
 - `node --test tests/worker-flow.test.cjs`: form validation, cloud template loading,
@@ -59,3 +73,9 @@ above do so.
 
 The browser transport is mocked; database authorization is separately tested on
 Supabase using the rollback suite above.
+
+Corrective-action coverage: `tests/corrective-action-database.sql` runs 49 rollback
+assertions for role restrictions, required notes, signature spoofing, immutable
+closeout and stale updates. `node tests/corrective-action-browser.cjs` checks all
+five roles, duplicate-title routing, required notes and failed-save retry. It uses
+the same Playwright environment options described above.
