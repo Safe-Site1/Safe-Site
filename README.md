@@ -72,9 +72,14 @@ description. Incident and Near Miss retain distinct record types.
 Each submission attempt has a UUID. Double clicks are ignored; an uncertain reply
 locks the original entries for a retry with the same UUID and payload. Exact
 replays return the existing record without creating another action. Database
-rejections unlock entries for correction. Drafts/retry IDs are held in the current
-page only and cleared on site changes/sign-out; after reloading an uncertain
-submission, check Recent Activity before re-entering it. Successful saves followed
+rejections unlock entries for correction unless an earlier response was uncertain.
+Pending requests are preserved in tab session storage before sending, scoped to
+account, organization, site and form. After reloading, reopen the same form and
+tap Submit to check or complete the original submission. Switching sites hides
+the pending entries until that site is selected again; sign-out clears recovery
+data from the tab. Closing the tab or clearing browser storage can lose recovery,
+so check Recent Activity before re-entering an uncertain report in a new tab.
+If session storage cannot preserve a request, nothing is sent. Successful saves followed
 by refresh failures are explicitly reported as saved.
 
 Photo evidence uploads remain unavailable. The old forms saved only filenames;

@@ -378,7 +378,7 @@ function openAuthenticatedApp(){
 }
 
 async function signOut(){
-  window.clearFieldDrafts?.();
+  window.clearFieldDrafts?.(true);
   cancelNewAction();
   if(initSupabase()) await supabaseClient.auth.signOut();
   cloudUser=null; cloudOrganizationId=null; cloudSiteIds={}; cloudRiskThresholds={};

@@ -19,11 +19,12 @@ const root=path.join(__dirname,'..');
    await page.addInitScript(()=>{
     window.actions=[{id:'late',due_date:'2030-01-01',description:'LATE'},{id:'closed',due_date:'2020-01-01',description:'OLD',status:'closed'},
      {id:'early',due_date:'2021-01-01',description:'EARLY'}].map(a=>({organization_id:'org',site_id:'site',title:'Duplicate title',status:'open',priority:'high',created_at:'2026-01-01',...a}));
-    window.patches=[];window.inserts=[];window.fieldCalls=[];window.fieldRecords=[];
+    window.patches=[];window.inserts=[];window.fieldCalls=JSON.parse(sessionStorage.getItem('mockFieldCalls')||'[]');window.fieldRecords=JSON.parse(sessionStorage.getItem('mockFieldRecords')||'[]');
     window.testClient={auth:{getSession:async()=>({data:{session:null}})},async rpc(name,p){
      if(name!=='submit_field_record')return {data:null,error:null};
      fieldCalls.push(p);
      if(!fieldRecords.some(r=>r.id===p.p_id))fieldRecords.push({id:p.p_id,organization_id:p.p_organization_id,site_id:p.p_site_id,record_type:p.p_type,title:p.p_title,work_area:p.p_area,data:p.p_data,status:'submitted',created_at:new Date().toISOString()});
+     sessionStorage.setItem('mockFieldCalls',JSON.stringify(fieldCalls));sessionStorage.setItem('mockFieldRecords',JSON.stringify(fieldRecords));
      if(window.loseFieldResponse){window.loseFieldResponse=false;return {error:{message:'Lost response'}};}
      return {data:p.p_id,error:null};
     },from(table){
@@ -61,6 +62,15 @@ const root=path.join(__dirname,'..');
     await page.evaluate(()=>{window.loseFieldResponse=true;});await page.locator('#inspectionSubmit').click();
     await page.waitForFunction(()=>!loseFieldResponse&&!document.getElementById('inspectionSubmit').disabled);
     assert.equal(await page.locator('#inspNotes').isDisabled(),true);
+    await page.reload();await page.waitForFunction(()=>window.__actionCloseoutActionsWrapped);
+    await page.evaluate(async role=>{
+     cloudUser={id:'pilot-user'};cloudOrganizationId='org';cloudSiteIds={Pilot:'site'};db.settings={company:'Test',site:'Pilot',role};db.workers=[];db.records=[];
+     document.getElementById('header').classList.remove('hidden');document.getElementById('nav').classList.remove('hidden');
+     await loadCloudSafetyData();show('inspection');
+    },role);
+    assert.equal(await page.locator('#inspNotes').inputValue(),'Synthetic defect');
+    assert.equal(await page.locator('#inspNotes').isDisabled(),true);
+    assert.match(await page.locator('#inspectionRecovery').innerText(),/earlier submission/);
     await page.locator('#inspectionSubmit').click();await page.waitForFunction(()=>!document.getElementById('dashboard').classList.contains('hidden'));
     assert.equal(await page.evaluate(()=>fieldCalls[0].p_id===fieldCalls[1].p_id),true);
     assert.equal(await page.evaluate(()=>fieldRecords.length),1);

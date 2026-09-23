@@ -6,6 +6,42 @@ const vm=require('node:vm');
 const root=path.join(__dirname,'..');
 const source=name=>fs.readFileSync(path.join(root,name),'utf8');
 
+test('reload restores the exact uncertain report and retires recovery after confirmation',async()=>{
+  const session=new Map(),first=fixture({session});first.run("cloudUser={id:'worker'}");first.load('field-submissions.js');
+  first.element('incType').value='Near Miss';first.element('incLocation').value='Bay';first.element('incDesc').value='Original';
+  let original;first.client.rpc=async(name,p)=>{original=p;return {error:{message:'Lost response'}};};
+  await first.ctx.submitIncident();assert.equal(session.size,1);
+  const next=fixture({session});next.run("cloudUser={id:'worker'}");next.load('field-submissions.js');next.ctx.show('incident');
+  assert.equal(next.element('incDesc').value,'Original');assert.equal(next.element('incDesc').disabled,true);
+  next.client.rpc=async(name,p)=>{assert.deepEqual(JSON.parse(JSON.stringify(p)),JSON.parse(JSON.stringify(original)));return {data:p.p_id};};
+  await next.ctx.submitIncident();assert.equal(session.size,0);assert.equal(next.element('incDesc').value,'');
+});
+
+test('recovery is isolated by account/site and sign-out clears only recovery keys',async()=>{
+  const session=new Map([['unrelated','keep']]),f=fixture({session});f.run("cloudUser={id:'worker'}");f.load('field-submissions.js');
+  f.element('incType').value='Incident';f.element('incLocation').value='Bay';f.element('incDesc').value='Private report';
+  f.client.rpc=async()=>({error:{message:'Offline'}});await f.ctx.submitIncident();
+  f.ctx.clearFieldDrafts();f.run("db.settings.site='B'");f.ctx.show('incident');assert.equal(f.element('incDesc').value,'');
+  f.run("db.settings.site='A';cloudUser={id:'different'}");f.ctx.show('incident');assert.equal(f.element('incDesc').value,'');
+  f.run("cloudUser={id:'worker'}");f.ctx.show('incident');assert.equal(f.element('incDesc').value,'Private report');
+  f.ctx.clearFieldDrafts(true);assert.equal(session.size,1);assert.equal(session.get('unrelated'),'keep');
+});
+
+test('blocked session storage prevents sending a report without reload recovery',async()=>{
+  const f=fixture();f.run("cloudUser={id:'worker'}");f.load('field-submissions.js');
+  f.element('incType').value='Incident';f.element('incLocation').value='Bay';f.element('incDesc').value='Test';
+  f.ctx.sessionStorage.setItem=()=>{throw new Error('Blocked');};let calls=0;f.client.rpc=async()=>{calls++;};
+  await f.ctx.submitIncident();assert.equal(calls,0);assert.match(f.element('incidentRecovery').textContent,/Nothing was sent/);
+});
+
+test('a later permission rejection does not discard an earlier uncertain submission',async()=>{
+  const session=new Map(),f=fixture({session});f.run("cloudUser={id:'worker'}");f.load('field-submissions.js');
+  f.element('incType').value='Incident';f.element('incLocation').value='Bay';f.element('incDesc').value='Test';
+  f.client.rpc=async()=>({error:{message:'Response lost'}});await f.ctx.submitIncident();
+  const original=[...session.values()][0];f.client.rpc=async()=>({error:{code:'42501'}});await f.ctx.submitIncident();
+  assert.equal(session.size,1);assert.equal([...session.values()][0],original);assert.equal(f.element('incDesc').disabled,true);
+});
+
 test('field submissions validate, deduplicate clicks and retry uncertain saves with unchanged ID',async()=>{
   const f=fixture();f.run("cloudUser={id:'worker'}");f.load('field-submissions.js');
   f.element('inspEquip').value='Bolter';f.element('inspCond').value='Deficiency Found';
@@ -71,7 +107,7 @@ test('manual action drafts cannot submit into a different site',async()=>{
   assert.equal(calls,0);assert.equal(f.element('actionCreateTitle').value,'');
 });
 
-function fixture({storage=new Map(),url='https://safe-site.test/',hour=9}={}){
+function fixture({storage=new Map(),session=new Map(),url='https://safe-site.test/',hour=9}={}){
   const elements=new Map(),listeners=new Map(),queries=[],saved=[],messages=[];
   const element=id=>{
     if(!elements.has(id))elements.set(id,{id,value:'',style:{},textContent:'',className:'',
@@ -86,6 +122,7 @@ function fixture({storage=new Map(),url='https://safe-site.test/',hour=9}={}){
   const ctx=vm.createContext({console:{error(){}},URL,URLSearchParams,Date:Clock,crypto:require('node:crypto'),
     navigator:{onLine:true},location,history:{replaceState(a,b,next){location.href=new URL(next,location).href;}},
     localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},
+    sessionStorage:{getItem:key=>session.get(key)||null,setItem:(key,value)=>session.set(key,value),removeItem:key=>session.delete(key),get length(){return session.size;},key:i=>[...session.keys()][i]},
     document:{getElementById:element,querySelectorAll:()=>[],querySelector:()=>null,createElement:()=>element('new')},
     setTimeout:()=>0,setInterval:()=>0,scrollTo(){},
     addEventListener(type,fn){if(!listeners.has(type))listeners.set(type,new Set());listeners.get(type).add(fn);},

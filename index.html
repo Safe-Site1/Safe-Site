@@ -240,6 +240,7 @@ hr{border:0;border-top:1px solid #1f3a46}
         <label>Notes<textarea id="inspNotes"></textarea></label>
         <p class="small muted">Photo uploads are not available yet. Describe any evidence in Notes.</p>
         <input id="inspPhoto" type="file" accept="image/*" hidden>
+        <p id="inspectionRecovery" role="status" class="small"></p>
         <button id="inspectionSubmit" class="btn" onclick="submitInspection()">Submit Inspection</button>
       </div>
     </section>
@@ -255,6 +256,7 @@ hr{border:0;border-top:1px solid #1f3a46}
         <label>People Involved<input id="incPeople"></label>
         <p class="small muted">Photo uploads are not available yet. Describe any evidence in Description.</p>
         <input id="incPhoto" type="file" accept="image/*" hidden>
+        <p id="incidentRecovery" role="status" class="small"></p>
         <button id="incidentSubmit" class="btn" onclick="submitIncident()">Submit Report</button>
       </div>
     </section>
@@ -332,7 +334,7 @@ hr{border:0;border-top:1px solid #1f3a46}
 <div id="buildMarker" style="display:none">pilot-polish-rebuild-20260909b</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=20260923f"></script>
+<script src="app.js?v=20260923h"></script>
 <script src="invitation-bootstrap-guard.js?v=20260922a"></script>
   <script src="pilot-management.js?v=20260923g"></script>
 <script src="team-permissions.js?v=20260922a"></script>
@@ -361,7 +363,7 @@ hr{border:0;border-top:1px solid #1f3a46}
 <script src="qualification-row-renderer-fix.js?v=20260912a"></script>
 <script src="ai-risk-assessment.js?v=20260923c"></script>
 <script src="client-viewer-pilot-fix.js?v=20260918a"></script>
-<script src="field-submissions.js?v=20260923a"></script>
+<script src="field-submissions.js?v=20260923b"></script>
 </body>
 </html>
 
