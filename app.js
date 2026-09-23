@@ -291,7 +291,7 @@ async function loadCloudSafetyData(){
   const client=initSupabase();
   const [{data:records,error:re},{data:actions,error:ae}]=await Promise.all([
     client.from('safety_records')
-      .select('id,site_id,record_type,title,work_area,task_name,data,status,created_at')
+      .select('id,site_id,record_type,title,work_area,task_name,data,status,created_at,approved_by,approved_at')
       .eq('organization_id',cloudOrganizationId)
       .order('created_at'),
     client.from('corrective_actions')
@@ -309,7 +309,9 @@ async function loadCloudSafetyData(){
     site:siteNames[r.site_id]||db.settings.site,
     time:r.created_at,
     details:{...(r.data||{}),area:r.work_area||(r.data||{}).area||''},
-    cloudStatus:r.status
+    cloudStatus:r.status,
+    approvedBy:r.approved_by,
+    approvedAt:r.approved_at
   }));
   db.actions=(actions||[]).map(a=>({
     id:a.id,
@@ -673,21 +675,90 @@ async function submitRiskAssessment(){
 }
 function prepPreShift(){
   psTask.innerHTML=taskOptions();
-  const t=db.tasks[0]; psHazards.value=t?.hazards.join('\n')||'';psControls.value=t?.controls.join('\n')||'';
-  psTask.onchange=()=>{const x=db.tasks.find(t=>String(t.id)===String(psTask.value));if(x){psHazards.value=x.hazards.join('\n');psControls.value=x.controls.join('\n')}};
+  const load=()=>{
+    const t=taskTemplatesReady()?db.tasks.find(t=>String(t.id)===String(psTask.value)):null;
+    psHazards.value=t?.hazards.join('\n')||'';
+    psControls.value=t?.controls.join('\n')||'';
+  };
+  load();
+  psTask.onchange=load;
 }
+let preShiftSubmitting=false;
 async function submitPreShift(){
+  if(preShiftSubmitting)return;
+  if(!['Administrator','Supervisor','Safety Coordinator','Worker'].includes(db.settings.role)){
+    toast('Your role does not have permission for that action');return;
+  }
+  const area=psArea.value.trim();
+  if(!area){toast('Work Area is required');psArea.focus();return;}
   const t=db.tasks.find(x=>String(x.id)===String(psTask.value));
-  const title=t?.name||'Task';
-  const details={crew:psCrew.value,area:psArea.value,hazards:psHazards.value,controls:psControls.value,supervisor:psSupervisor.value};
+  if(!taskTemplatesReady()||!t){toast('Wait for cloud task templates to load before submitting');return;}
+  if(!psHazards.value.trim()||!psControls.value.trim()){toast('Hazards and controls are required');return;}
+  const title=t.name;
+  const details={crew:psCrew.value,area,hazards:psHazards.value.trim(),controls:psControls.value.trim(),taskTemplateId:t.id};
+  preShiftSubmitting=true;
+  const button=document.getElementById('psSubmit');
+  if(button)button.disabled=true;
   try{
-    await saveCloudSafetyRecord('pre_shift',title,psArea.value,title,details);
-    await loadCloudSafetyData();
+    await saveCloudSafetyRecord('pre_shift',title,area,title,details,'pending_review');
+    psArea.value='';
     logAudit('submitted','pre-shift',title);
-    toast('Pre-shift saved to cloud');
+    try{await loadCloudSafetyData();}catch(e){console.error(e);}
+    toast('Pre-shift submitted — Pending Supervisor Review');
     show('dashboard');
   }catch(e){
     console.error(e); toast('Pre-shift could not save to cloud');
+  }finally{
+    preShiftSubmitting=false;
+    if(button)button.disabled=false;
+  }
+}
+
+function canApprovePreShift(){
+  return ['Administrator','Supervisor','Safety Coordinator'].includes(db.settings.role);
+}
+function preShiftStatusLabel(record){
+  return record.cloudStatus==='approved'&&record.approvedBy&&record.approvedAt?'Approved':'Pending Supervisor Review';
+}
+function preShiftReviewHTML(record){
+  const esc=value=>String(value||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
+  if(record.type!=='Pre-Shift')return '';
+  const approved=preShiftStatusLabel(record)==='Approved';
+  return `<div class="card"><h2>${preShiftStatusLabel(record)}</h2>${approved?
+    `<p>Signed by authenticated account <strong>${esc(record.approvedBy)}</strong></p><p>${esc(new Date(record.approvedAt).toLocaleString())}</p>`:
+    `<p>This submission has not been approved. An authorized reviewer must review the work area, hazards and controls below before signing.</p>${canApprovePreShift()&&record.cloudStatus==='pending_review'?
+      `<button id="approvePreShiftButton" class="btn" onclick="approvePreShift('${esc(record.id)}')">Approve &amp; Sign as My Account</button>`:''}`}</div>`;
+}
+const preShiftApprovals=new Set();
+async function approvePreShift(id){
+  if(!canApprovePreShift()){toast('Your role cannot approve pre-shifts');return;}
+  if(preShiftApprovals.has(id))return;
+  preShiftApprovals.add(id);
+  const button=document.getElementById('approvePreShiftButton');
+  if(button)button.disabled=true;
+  try{
+    const client=initSupabase();
+    const {data:auth,error:authError}=await client.auth.getUser();
+    if(authError||!auth?.user)throw new Error('Sign in required');
+    // Send only the transition. The database validates membership and stamps identity/time.
+    const {data:row,error}=await client.from('safety_records').update({status:'approved'})
+      .eq('id',id).eq('organization_id',cloudOrganizationId).eq('record_type','pre_shift')
+      .eq('status','pending_review').select('id,approved_by,approved_at').single();
+    if(error||!row?.approved_by||!row?.approved_at)throw error||new Error('Approval not saved');
+    try{
+      await loadCloudSafetyData();
+      if(typeof openRecordDetail==='function')await openRecordDetail(id);
+      toast('Pre-shift approved and signed');
+    }catch(e){
+      console.error(e);
+      toast('Approval saved. Reload to see the signed record.');
+    }
+  }catch(e){
+    console.error(e);
+    toast('Approval could not complete. Refresh the record and check your access; it may already be approved.');
+  }finally{
+    preShiftApprovals.delete(id);
+    if(button)button.disabled=false;
   }
 }
 async function submitInspection(){

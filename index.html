@@ -221,12 +221,12 @@ hr{border:0;border-top:1px solid #1f3a46}
       <h1>Pre-Shift</h1>
       <div class="card">
         <label>Crew<select id="psCrew"><option>Development Crew A</option><option>Construction Crew B</option><option>Service Crew</option></select></label>
-        <label>Work Area<input id="psArea" placeholder="Enter the actual work area"></label>
+        <label>Work Area (required)<input id="psArea" required placeholder="Enter the actual work area"></label>
         <label>Task<select id="psTask"></select></label>
         <label>Hazards<textarea id="psHazards"></textarea></label>
         <label>Controls<textarea id="psControls"></textarea></label>
-        <label>Supervisor Sign-off<input id="psSupervisor" placeholder="Supervisor name"></label>
-        <button class="btn" onclick="submitPreShift()">Submit Pre-Shift</button>
+        <p class="notice">Submitting sends this pre-shift for supervisor review. Approval is signed separately by an authorized reviewer using their own account.</p>
+        <button id="psSubmit" class="btn" onclick="submitPreShift()">Submit for Supervisor Review</button>
       </div>
     </section>
 
@@ -321,9 +321,9 @@ hr{border:0;border-top:1px solid #1f3a46}
 <div id="buildMarker" style="display:none">pilot-polish-rebuild-20260909b</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=20260922a"></script>
+<script src="app.js?v=20260923a"></script>
 <script src="invitation-bootstrap-guard.js?v=20260922a"></script>
-  <script src="pilot-management.js?v=20260909b"></script>
+  <script src="pilot-management.js?v=20260923a"></script>
 <script src="team-permissions.js?v=20260922a"></script>
   <script src="role-access-v4.js?v=20260912a"></script>
 <script src="action-closeout.js?v=20260909d"></script>

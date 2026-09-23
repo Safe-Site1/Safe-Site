@@ -184,3 +184,84 @@ test('production forms have no demo area/person defaults; FLRA input is required
 test('all shipped JavaScript parses, including the worker permission module',()=>{
   for(const name of fs.readdirSync(root).filter(name=>name.endsWith('.js')))new vm.Script(source(name),{filename:name});
 });
+
+test('Pre-Shift requires Work Area, hazards, controls and a current cloud task',async()=>{
+  const f=fixture();await ready(f);
+  for(const area of ['', '   ', '\n\t']){f.element('psArea').value=area;await f.ctx.submitPreShift();}
+  assert.equal(f.saved.length,0);assert.equal(f.element('psArea').focused,true);
+  f.element('psArea').value=' Work bay ';
+  f.element('psHazards').value=' ';await f.ctx.submitPreShift();assert.equal(f.saved.length,0);
+  await ready(f);f.element('psControls').value=' ';await f.ctx.submitPreShift();assert.equal(f.saved.length,0);
+  await ready(f);f.element('psTask').value='not-a-task';await f.ctx.submitPreShift();assert.equal(f.saved.length,0);
+  await ready(f);f.run("db.settings.site='B'");await f.ctx.submitPreShift();assert.equal(f.saved.length,0);
+});
+
+for(const role of ['Worker','Supervisor','Administrator','Safety Coordinator']){
+  test(`${role} submits Pre-Shift pending review without signature fields`,async()=>{
+    const f=fixture();await ready(f);f.run(`db.settings.role=${JSON.stringify(role)}`);
+    f.element('psArea').value='  Actual bay  ';await f.ctx.submitPreShift();
+    assert.equal(f.saved.length,1);const args=f.saved[0];
+    assert.equal(args[0],'pre_shift');assert.equal(args[2],'Actual bay');assert.equal(args[5],'pending_review');
+    assert.equal(args[4].taskTemplateId,task.id);assert.equal(args[4].hazards,'First\nSecond');
+    assert.equal(args[4].controls,'Control A\nControl B');assert.equal('supervisor' in args[4],false);
+    assert.equal(f.element('psArea').value,'');assert.match(f.messages.at(-1),/Pending Supervisor Review/);
+  });
+}
+
+test('Pre-Shift blocks Client Viewer and unknown roles; repeated clicks submit once',async()=>{
+  const f=fixture();await ready(f);f.element('psArea').value='Area';
+  for(const role of ['Client Viewer','Unknown']){f.run(`db.settings.role=${JSON.stringify(role)}`);await f.ctx.submitPreShift();}
+  assert.equal(f.saved.length,0);f.run("db.settings.role='Worker'");
+  let resolve;f.ctx.saveCloudSafetyRecord=()=>new Promise(r=>resolve=r);
+  const first=f.ctx.submitPreShift();assert.equal(f.element('psSubmit').disabled,true);
+  await f.ctx.submitPreShift();resolve({id:'one'});await first;assert.equal(f.element('psSubmit').disabled,false);
+});
+
+test('failed pre-shift save preserves entry and allows retry; refresh failure does not invite duplicate',async()=>{
+  const f=fixture();await ready(f);f.element('psArea').value='Area';
+  f.ctx.saveCloudSafetyRecord=async()=>{throw new Error('offline');};await f.ctx.submitPreShift();
+  assert.equal(f.element('psArea').value,'Area');assert.equal(f.element('psSubmit').disabled,false);
+  f.ctx.saveCloudSafetyRecord=async()=>({id:'ok'});f.ctx.loadCloudSafetyData=async()=>{throw new Error('refresh');};
+  await f.ctx.submitPreShift();assert.equal(f.element('psArea').value,'');assert.match(f.messages.at(-1),/submitted/);
+});
+
+test('Pre-Shift form has no typed sign-off; review renders safe status and only staff can sign',()=>{
+  assert.doesNotMatch(source('index.html'),/psSupervisor/);assert.match(source('index.html'),/id="psArea" required/);
+  const f=fixture(),record={id:'id',type:'Pre-Shift',cloudStatus:'pending_review'};
+  for(const role of ['Worker','Client Viewer']){
+    f.run(`db.settings.role=${JSON.stringify(role)}`);assert.doesNotMatch(f.ctx.preShiftReviewHTML(record),/<button/);
+  }
+  for(const role of ['Supervisor','Administrator','Safety Coordinator']){
+    f.run(`db.settings.role=${JSON.stringify(role)}`);assert.match(f.ctx.preShiftReviewHTML(record),/Approve &amp; Sign/);
+  }
+  assert.equal(f.ctx.preShiftStatusLabel({...record,cloudStatus:'approved'}),'Pending Supervisor Review');
+  const approved={...record,cloudStatus:'approved',approvedBy:'<script>',approvedAt:'2026-09-23T01:00:00Z'};
+  const html=f.ctx.preShiftReviewHTML(approved);assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/<button|<script>/);
+});
+
+function approvalClient(f,result={data:{id:'record',approved_by:'staff-id',approved_at:'2026-09-23T01:00:00Z'},error:null}){
+  const calls=[];
+  f.client.from=table=>{
+    const call={table,filters:[]};calls.push(call);
+    return {update(patch){call.patch=patch;return this;},eq(...filter){call.filters.push(filter);return this;},
+      select(){return this;},single:async()=>result};
+  };
+  return calls;
+}
+test('workers/viewers cannot invoke approval; staff approval sends only status and uses pending conditional update',async()=>{
+  const f=fixture(),calls=approvalClient(f);
+  for(const role of ['Worker','Client Viewer']){f.run(`db.settings.role=${JSON.stringify(role)}`);await f.ctx.approvePreShift('record');}
+  assert.equal(calls.length,0);
+  for(const role of ['Supervisor','Administrator','Safety Coordinator']){
+    f.run(`db.settings.role=${JSON.stringify(role)}`);await f.ctx.approvePreShift('record');
+    assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1).patch)),{status:'approved'});
+    assert.deepEqual(calls.at(-1).filters,[['id','record'],['organization_id','org'],['record_type','pre_shift'],['status','pending_review']]);
+    assert.match(f.messages.at(-1),/approved and signed/);
+  }
+});
+test('expired login, denied or already-reviewed approval cannot report success',async()=>{
+  const f=fixture(),calls=approvalClient(f,{data:null,error:new Error('zero rows')});f.run("db.settings.role='Supervisor'");
+  f.client.auth.getUser=async()=>({data:{user:null}});await f.ctx.approvePreShift('record');assert.equal(calls.length,0);
+  f.client.auth.getUser=async()=>({data:{user:{id:'staff'}}});await f.ctx.approvePreShift('record');
+  assert.equal(calls.length,1);assert.doesNotMatch(f.messages.join(' '),/approved and signed/);
+});
