@@ -6,6 +6,29 @@ const vm=require('node:vm');
 const root=path.join(__dirname,'..');
 const source=name=>fs.readFileSync(path.join(root,name),'utf8');
 
+test('manual actions validate dates, preserve failed drafts and block duplicate in-flight saves',async()=>{
+  const f=fixture();f.run("db.settings.role='Supervisor'");f.ctx.addAction();
+  f.element('actionCreateTitle').value='Test action';f.element('actionCreateDescription').value='Details';
+  f.element('actionCreateDue').value='2026-02-30';let calls=0,release;
+  f.ctx.saveCloudCorrectiveAction=async()=>{calls++;return new Promise(resolve=>{release=resolve;});};
+  await f.ctx.submitNewAction();assert.equal(calls,0);
+  f.element('actionCreateDue').value='2026-09-30';
+  const pending=f.ctx.submitNewAction();await f.ctx.submitNewAction();assert.equal(calls,1);
+  release(null);await pending;assert.equal(f.element('actionCreateTitle').value,'Test action');
+  f.ctx.saveCloudCorrectiveAction=async()=>({id:'saved'});
+  f.ctx.loadCloudSafetyData=async()=>{throw new Error('Refresh unavailable');};
+  await f.ctx.submitNewAction();assert.equal(f.element('actionCreateTitle').value,'');
+  assert.match(f.messages.at(-1),/Action saved, but the list could not refresh/);
+});
+
+test('manual action drafts cannot submit into a different site',async()=>{
+  const f=fixture();f.run("db.settings.role='Supervisor'");f.ctx.addAction();
+  f.element('actionCreateTitle').value='Site A draft';let calls=0;
+  f.ctx.saveCloudCorrectiveAction=async()=>{calls++;return {id:'saved'};};
+  f.run("db.settings.site='B'");await f.ctx.submitNewAction();
+  assert.equal(calls,0);assert.equal(f.element('actionCreateTitle').value,'');
+});
+
 function fixture({storage=new Map(),url='https://safe-site.test/',hour=9}={}){
   const elements=new Map(),listeners=new Map(),queries=[],saved=[],messages=[];
   const element=id=>{

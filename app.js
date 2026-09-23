@@ -378,6 +378,7 @@ function openAuthenticatedApp(){
 }
 
 async function signOut(){
+  cancelNewAction();
   if(initSupabase()) await supabaseClient.auth.signOut();
   cloudUser=null; cloudOrganizationId=null; cloudSiteIds={}; cloudRiskThresholds={};
   window.resetAIRiskDraft?.();
@@ -472,6 +473,7 @@ function populateSiteSwitcher(){
   siteSwitcher.innerHTML=db.sites.map(s=>`<option ${s===db.settings.site?'selected':''}>${s}</option>`).join('');
 }
 async function switchSite(){
+  cancelNewAction();
   db.settings.site=siteSwitcher.value;
   const loading=loadCloudTaskTemplates();
   persist(); show('dashboard');
@@ -824,16 +826,54 @@ async function submitIncident(){
 function renderActions(){
   actionsList.innerHTML=db.actions.filter(a=>a.site===db.settings.site).map(a=>`<div class="card"><div class="row"><div class="grow"><b>${a.description}</b><div class="small muted">${a.owner} · Due ${a.due}</div></div>${badge(a.status)}</div><div class="quick" style="margin-top:10px"><button onclick="setAction('${a.id}','in_progress')">Start</button><button onclick="setAction('${a.id}','closed')">Close</button></div></div>`).join('')||'<div class="card muted">No corrective actions.</div>';
 }
-async function addAction(){
-  const d=prompt('Corrective action');if(!d)return;
-  const owner=prompt('Owner','Supervisor')||'Supervisor';
-  const due=prompt('Due date (YYYY-MM-DD)',new Date(Date.now()+7*86400000).toISOString().slice(0,10))||null;
+let newActionContext=null,newActionSaving=false;
+function cancelNewAction(){
+  newActionContext=null;
+  document.getElementById('actionCreateForm').classList.add('hidden');
+  document.getElementById('actionCreateTitle').value='';
+  document.getElementById('actionCreateDescription').value='';
+}
+function addAction(){
+  if(!canManageCorrectiveActions()){toast('Your role cannot create corrective actions');return;}
+  if(newActionSaving)return;
+  if(!cloudOrganizationId||!currentCloudSiteId()){toast('Wait for your cloud site to load');return;}
+  if(!newActionContext){
+    newActionContext={organization:cloudOrganizationId,site:currentCloudSiteId()};
+    document.getElementById('actionCreatePriority').value='medium';
+    document.getElementById('actionCreateDue').value=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+  }
+  document.getElementById('actionCreateSite').textContent=`Site: ${db.settings.site}`;
+  document.getElementById('actionCreateForm').classList.remove('hidden');
+  document.getElementById('actionCreateTitle').focus();
+}
+async function submitNewAction(){
+  if(!canManageCorrectiveActions()){toast('Your role cannot create corrective actions');return;}
+  if(newActionSaving)return;
+  const context=newActionContext;
+  if(!context||context.organization!==cloudOrganizationId||context.site!==currentCloudSiteId()){
+    cancelNewAction();toast('Open a new action for your current site');return;
+  }
+  const title=document.getElementById('actionCreateTitle').value.trim();
+  const description=document.getElementById('actionCreateDescription').value.trim();
+  const priority=document.getElementById('actionCreatePriority').value;
+  const dueDate=document.getElementById('actionCreateDue').value||null;
+  if(!title||title.length>200||description.length>4000){toast('Enter an action of up to 200 characters and a description of up to 4000 characters');return;}
+  if(!['low','medium','high','critical'].includes(priority)){toast('Choose a valid priority');return;}
+  if(dueDate&&(!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)||!Number.isFinite(Date.parse(dueDate))||new Date(dueDate).toISOString().slice(0,10)!==dueDate)){
+    toast('Enter a valid due date');return;
+  }
+  const button=document.getElementById('actionCreateSubmit');
+  newActionSaving=true;button.disabled=true;
   try{
-    await saveCloudCorrectiveAction({title:d,description:`Owner: ${owner}`,priority:'medium',dueDate:due});
-    await loadCloudSafetyData();
-    logAudit('created','corrective action',d);
-    renderActions();toast('Corrective action saved to cloud');
-  }catch(e){console.error(e);toast('Corrective action could not save to cloud')}
+    const row=await saveCloudCorrectiveAction({title,description,priority,dueDate});
+    if(!row?.id)throw new Error('Cloud save did not return an action');
+    if(newActionContext!==context)return;
+    cancelNewAction();
+    logAudit('created','corrective action',title);
+    try{await loadCloudSafetyData();renderActions();toast('Corrective action saved to cloud');}
+    catch(e){console.error(e);toast('Action saved, but the list could not refresh. Reload to see it.');}
+  }catch(e){console.error(e);if(newActionContext===context)toast('Corrective action could not save. Your entries are kept for retry.');}
+  finally{newActionSaving=false;button.disabled=false;}
 }
 async function setAction(id,status){
   if(!canManageCorrectiveActions()){toast('Your role cannot change corrective actions');return;}

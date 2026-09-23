@@ -55,6 +55,11 @@ remain read-only. Legacy closed actions retain their original history and are
 labeled as lacking a verified closer identity. Sorted/filtered lists and duplicate
 titles use action IDs so they open the correct source and closeout record.
 
+Staff create manual actions with the on-page **+ Add** form: required action,
+description, priority and optional due date. Failed saves retain entries for retry;
+Cancel, site changes and sign-out discard drafts. A successful save followed by a
+list refresh failure is reported as saved, preventing an unnecessary second insert.
+
 ## Tests
 
 - `node --test tests/worker-flow.test.cjs`: form validation, cloud template loading,

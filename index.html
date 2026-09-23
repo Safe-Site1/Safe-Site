@@ -259,6 +259,15 @@ hr{border:0;border-top:1px solid #1f3a46}
 
     <section id="actions" class="screen hidden">
       <div class="topline"><h1>Corrective Actions</h1><button id="addActionBtn" class="btn" style="width:auto;padding:10px 14px" onclick="addAction()">+ Add</button></div>
+      <form id="actionCreateForm" class="card hidden" onsubmit="event.preventDefault();submitNewAction()">
+        <h2>New Corrective Action</h2>
+        <p id="actionCreateSite" class="small muted"></p>
+        <label>Action (required)<input id="actionCreateTitle" required maxlength="200"></label>
+        <label>Description<textarea id="actionCreateDescription" maxlength="4000"></textarea></label>
+        <label>Priority<select id="actionCreatePriority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option><option value="critical">Critical</option></select></label>
+        <label>Due Date<input id="actionCreateDue" type="date"></label>
+        <div class="quick"><button id="actionCreateSubmit" class="btn" type="submit">Save Corrective Action</button><button type="button" onclick="cancelNewAction()">Cancel</button></div>
+      </form>
       <div id="actionsList"></div>
     </section>
 
@@ -321,7 +330,7 @@ hr{border:0;border-top:1px solid #1f3a46}
 <div id="buildMarker" style="display:none">pilot-polish-rebuild-20260909b</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=20260923d"></script>
+<script src="app.js?v=20260923e"></script>
 <script src="invitation-bootstrap-guard.js?v=20260922a"></script>
   <script src="pilot-management.js?v=20260923d"></script>
 <script src="team-permissions.js?v=20260922a"></script>
