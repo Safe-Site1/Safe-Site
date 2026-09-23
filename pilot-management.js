@@ -91,7 +91,7 @@
     section.id = 'recordDetail';
     section.className = 'screen hidden';
     section.innerHTML = `
-      <div class="back" onclick="show('reports')">‹ Back to Reports</div>
+      <div id="recordDetailBack" class="back">‹ Back</div>
       <h1 id="recordDetailTitle">Safety Record</h1>
       <p id="recordDetailSub" class="muted"></p>
       <div id="recordDetailBody"></div>
@@ -202,11 +202,16 @@
       }catch(e){console.error(e);toast('Pre-shift could not load. Check your connection and access.');return;}
     }
     ensurePilotUI();
+    const canOpenReports=['Administrator','Supervisor','Safety Coordinator','Client Viewer'].includes(db.settings.role);
+    const back=document.getElementById('recordDetailBack');
+    back.textContent=canOpenReports?'‹ Back to Reports':'‹ Back to Home';
+    back.onclick=()=>show(canOpenReports?'reports':'dashboard');
     document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
     document.getElementById('recordDetail').classList.remove('hidden');
     document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
     const reportsNav = document.getElementById('n-reports');
-    if(reportsNav) reportsNav.classList.add('active');
+    if(reportsNav&&canOpenReports) reportsNav.classList.add('active');
+    if(!canOpenReports)document.getElementById('n-dashboard')?.classList.add('active');
 
     document.getElementById('recordDetailTitle').textContent = `${rec.type}: ${rec.title}`;
     document.getElementById('recordDetailSub').textContent =

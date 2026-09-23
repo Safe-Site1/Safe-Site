@@ -61,6 +61,9 @@ const root=path.join(__dirname,'..');
         await page.evaluate(()=>openRecordDetail('record-id'));
         assert.equal(await page.locator('#approvePreShiftButton').count(),0);
         assert.match(await page.locator('#recordDetailBody').innerText(),/Pending Supervisor Review/);
+        assert.equal(await page.locator('#recordDetailBack').innerText(),'‹ Back to Home');
+        await page.locator('#recordDetailBack').click();
+        assert.equal(await page.locator('#dashboard').isVisible(),true);
       }else{
         await page.evaluate(async()=>{
           testRecords.push({id:'record-id',organization_id:'org',site_id:'site',record_type:'pre_shift',title:'Cloud bolting task',work_area:'Pilot test bay',
@@ -70,6 +73,7 @@ const root=path.join(__dirname,'..');
         assert.match(await page.locator('#reportsBody').innerText(),/Pending Supervisor Review/);
         await page.locator('.recordCard').click();
         await page.locator('#recordDetailBody h2').waitFor();
+        assert.equal(await page.locator('#recordDetailBack').innerText(),'‹ Back to Reports');
         if(role==='Client Viewer'){
           assert.equal(await page.locator('#approvePreShiftButton').count(),0);
           await page.evaluate(()=>approvePreShift('record-id'));
