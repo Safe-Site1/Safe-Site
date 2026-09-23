@@ -189,17 +189,18 @@
     const request=++recordDetailRequest;
     const rec = db.records.find(r=>String(r.id)===String(id));
     if(!rec) return;
-    if(rec.type==='Pre-Shift'){
+    if(requiresSafetyReview(rec)){
       try{
         const {data:row,error}=await initSupabase().from('safety_records')
           .select('id,title,work_area,data,status,approved_by,approved_at')
-          .eq('id',id).eq('organization_id',cloudOrganizationId).eq('record_type','pre_shift').single();
+          .eq('id',id).eq('organization_id',cloudOrganizationId)
+          .eq('record_type',rec.type==='Pre-Shift'?'pre_shift':'pre_task_risk_assessment').single();
         if(error||!row)throw error||new Error('Record unavailable');
         if(request!==recordDetailRequest)return;
         rec.title=row.title;
         rec.details={...row.data,area:row.work_area};
         rec.cloudStatus=row.status;rec.approvedBy=row.approved_by;rec.approvedAt=row.approved_at;
-      }catch(e){console.error(e);toast('Pre-shift could not load. Check your connection and access.');return;}
+      }catch(e){console.error(e);toast('Safety record could not load. Check your connection and access.');return;}
     }
     ensurePilotUI();
     const canOpenReports=['Administrator','Supervisor','Safety Coordinator','Client Viewer'].includes(db.settings.role);
@@ -227,7 +228,7 @@
           <div class="detailRow"><b>Title / Task</b><div>${esc(rec.title)}</div></div>
           <div class="detailRow"><b>Site</b><div>${esc(rec.site)}</div></div>
           <div class="detailRow"><b>Submitted</b><div>${esc(new Date(rec.time).toLocaleString())}</div></div>
-          ${Object.entries(details).map(([k,v])=>`<div class="detailRow"><b>${esc(detailLabel(k))}</b><div>${detailValue(v)}</div></div>`).join('')}
+          ${Object.entries(details).filter(([k])=>k!=='taskTemplateId').map(([k,v])=>`<div class="detailRow"><b>${esc(detailLabel(k))}</b><div>${detailValue(v)}</div></div>`).join('')}
         </div>
       </div>
       <div class="section">Linked Corrective Actions</div>
@@ -273,7 +274,7 @@
       reportsBody.innerHTML = rows.length ? rows.map(r=>`
         <div class="recordCard" onclick="openRecordDetail('${esc(r.id)}')">
           <div class="recordType">${esc(r.type)}</div>
-          <div class="row"><div class="grow"><b>${esc(r.title)}</b></div><span class="badge ${r.type==='Pre-Shift'&&preShiftStatusLabel(r)!=='Approved'?'warn':'ok'}">${r.type==='Pre-Shift'?preShiftStatusLabel(r):'Completed'}</span></div>
+          <div class="row"><div class="grow"><b>${esc(r.title)}</b></div><span class="badge ${requiresSafetyReview(r)&&preShiftStatusLabel(r)!=='Approved'?'warn':'ok'}">${requiresSafetyReview(r)?preShiftStatusLabel(r):'Completed'}</span></div>
           <div class="recordMeta">
             <span class="small muted">${esc(r.details?.area || r.details?.workArea || 'No work area')}</span>
             <span class="small muted">• ${esc(new Date(r.time).toLocaleString())}</span>
@@ -369,7 +370,7 @@
     activity.innerHTML = db.records.filter(r=>r.site===db.settings.site)
       .slice().sort((a,b)=>new Date(b.time)-new Date(a.time)).slice(0,6)
       .map(r=>`<div class="item" onclick="openRecordDetail('${esc(r.id)}')" style="cursor:pointer">
-        <b>${esc(r.type)}</b>${r.type==='Pre-Shift'?`<div class="small">${preShiftStatusLabel(r)}</div>`:''}<div class="small muted">${esc(r.title)} · ${esc(new Date(r.time).toLocaleString())}</div>
+        <b>${esc(r.type)}</b>${requiresSafetyReview(r)?`<div class="small">${preShiftStatusLabel(r)}</div>`:''}<div class="small muted">${esc(r.title)} · ${esc(new Date(r.time).toLocaleString())}</div>
       </div>`).join('') || '<div class="muted">No activity yet.</div>';
   };
 

@@ -199,7 +199,7 @@ hr{border:0;border-top:1px solid #1f3a46}
       <div class="notice small">Uses a demo 5×5 risk matrix. Company/site risk criteria should be configured to match your approved procedure before real-world use.</div>
       <div class="card">
         <label>Task<select id="praTask" onchange="loadRiskTaskTemplate()"></select></label>
-        <label>Work Area<input id="praArea" placeholder="Enter the actual work area"></label>
+        <label>Work Area (required)<input id="praArea" required placeholder="Enter the actual work area"></label>
         <label>Hazards<textarea id="praHazards"></textarea></label>
         <div class="section">Initial Risk</div>
         <label>Likelihood<select id="praInitialLikelihood" onchange="updateRiskScores()"><option value="1">1 - Rare</option><option value="2">2 - Unlikely</option><option value="3" selected>3 - Possible</option><option value="4">4 - Likely</option><option value="5">5 - Almost Certain</option></select></label>
@@ -210,9 +210,9 @@ hr{border:0;border-top:1px solid #1f3a46}
         <label>Likelihood<select id="praResidualLikelihood" onchange="updateRiskScores()"><option value="1">1 - Rare</option><option value="2" selected>2 - Unlikely</option><option value="3">3 - Possible</option><option value="4">4 - Likely</option><option value="5">5 - Almost Certain</option></select></label>
         <label>Severity<select id="praResidualSeverity" onchange="updateRiskScores()"><option value="1">1 - Minor</option><option value="2">2 - Moderate</option><option value="3" selected>3 - Serious</option><option value="4">4 - Major</option><option value="5">5 - Catastrophic</option></select></label>
         <div id="praResidualResult" class="notice"></div>
-        <label>Supervisor Sign-off<input id="praSupervisor" placeholder="Supervisor name"></label>
+        <p class="notice">This assessment is submitted for supervisor review. An authorized reviewer approves and signs separately using their own account.</p>
         <label>Crew Acknowledgement<input id="praCrew" placeholder="Names of participating crew members"></label>
-        <button class="btn" onclick="submitRiskAssessment()">Submit Pre-Task Risk Assessment</button>
+        <button id="praSubmit" class="btn" onclick="submitRiskAssessment()">Submit for Supervisor Review</button>
       </div>
     </section>
 
@@ -321,9 +321,9 @@ hr{border:0;border-top:1px solid #1f3a46}
 <div id="buildMarker" style="display:none">pilot-polish-rebuild-20260909b</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=20260923a"></script>
+<script src="app.js?v=20260923c"></script>
 <script src="invitation-bootstrap-guard.js?v=20260922a"></script>
-  <script src="pilot-management.js?v=20260923b"></script>
+  <script src="pilot-management.js?v=20260923c"></script>
 <script src="team-permissions.js?v=20260922a"></script>
   <script src="role-access-v4.js?v=20260912a"></script>
 <script src="action-closeout.js?v=20260909d"></script>
@@ -348,7 +348,7 @@ hr{border:0;border-top:1px solid #1f3a46}
 <script src="qualification-duplicate-fix.js?v=20260911a"></script>
 <script src="worker-passport-expiry-display-fix.js?v=20260911a"></script>
 <script src="qualification-row-renderer-fix.js?v=20260912a"></script>
-<script src="ai-risk-assessment.js?v=20260912a"></script>
+<script src="ai-risk-assessment.js?v=20260923c"></script>
 <script src="client-viewer-pilot-fix.js?v=20260918a"></script>
 </body>
 </html>

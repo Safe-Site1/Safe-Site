@@ -265,3 +265,46 @@ test('expired login, denied or already-reviewed approval cannot report success',
   f.client.auth.getUser=async()=>({data:{user:{id:'staff'}}});await f.ctx.approvePreShift('record');
   assert.equal(calls.length,1);assert.doesNotMatch(f.messages.join(' '),/approved and signed/);
 });
+
+async function readyRisk(f){
+  await ready(f);
+  for(const [id,value] of Object.entries({praArea:' Actual bay ',praInitialLikelihood:'3',praInitialSeverity:'4',praResidualLikelihood:'2',praResidualSeverity:'3'}))f.element(id).value=value;
+}
+test('risk assessment requires Work Area, cloud task, hazards, controls and integer ratings',async()=>{
+  const f=fixture();await readyRisk(f);
+  for(const area of ['', '  ', '\n\t']){f.element('praArea').value=area;await f.ctx.submitRiskAssessment();}
+  assert.equal(f.saved.length,0);assert.equal(f.element('praArea').focused,true);
+  for(const [id,value] of [['praHazards',' '],['praControls',' '],['praTask','unknown'],['praInitialSeverity','1.5'],['praResidualLikelihood','6'],['praResidualSeverity','NaN']]){
+    await readyRisk(f);f.element(id).value=value;await f.ctx.submitRiskAssessment();assert.equal(f.saved.length,0);
+  }
+  await readyRisk(f);f.run("db.settings.site='B'");await f.ctx.submitRiskAssessment();assert.equal(f.saved.length,0);
+});
+for(const role of ['Worker','Supervisor','Administrator','Safety Coordinator']){
+  test(`${role} submits risk assessment pending review without supervisor metadata`,async()=>{
+    const f=fixture();await readyRisk(f);f.run(`db.settings.role=${JSON.stringify(role)}`);
+    const row=await f.ctx.submitRiskAssessment();assert.equal(row.id,'record');
+    assert.equal(f.saved.length,1);const args=f.saved[0];
+    assert.equal(args[0],'pre_task_risk_assessment');assert.equal(args[2],'Actual bay');assert.equal(args[5],'pending_review');
+    assert.equal(args[4].taskTemplateId,task.id);assert.equal(args[4].initialScore,12);assert.equal(args[4].residualScore,6);
+    assert.equal('supervisor' in args[4],false);assert.equal(f.element('praArea').value,'');
+  });
+}
+test('risk stop-work gate uses cloud site threshold even when local configuration is forged',async()=>{
+  const f=fixture();await readyRisk(f);
+  f.run("cloudRiskThresholds={'site-a':6};db.settings.riskStopWorkThreshold=25;window.SAFE_SITE_RISK_CONFIG={stopWorkThreshold:25}");
+  await f.ctx.submitRiskAssessment();assert.equal(f.saved.length,0);
+  f.element('praResidualSeverity').value='2';await f.ctx.submitRiskAssessment();assert.equal(f.saved.length,1);
+});
+test('Client Viewer cannot submit risks and failed saves preserve inputs for retry',async()=>{
+  const f=fixture();await readyRisk(f);f.run("db.settings.role='Client Viewer'");await f.ctx.submitRiskAssessment();assert.equal(f.saved.length,0);
+  f.run("db.settings.role='Worker'");f.ctx.saveCloudSafetyRecord=async()=>{throw new Error('offline');};
+  await f.ctx.submitRiskAssessment();assert.equal(f.element('praArea').value,' Actual bay ');assert.equal(f.element('praSubmit').disabled,false);
+});
+test('risk approval uses the risk record type and shares verified review display',async()=>{
+  const f=fixture(),calls=approvalClient(f);f.run("db.settings.role='Supervisor'");
+  await f.ctx.approvePreShift('risk','pre_task_risk_assessment');
+  assert.deepEqual(calls[0].filters[2],['record_type','pre_task_risk_assessment']);
+  assert.match(f.ctx.preShiftReviewHTML({id:'risk',type:'Pre-Task Risk Assessment',cloudStatus:'pending_review'}),/pre_task_risk_assessment/);
+  assert.doesNotMatch(source('index.html')+source('app.js'),/praSupervisor/);
+  assert.match(source('index.html'),/id="praArea" required/);
+});

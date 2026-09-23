@@ -54,7 +54,7 @@ function renderReview(hazards,controls,summary){
   }
   const hs=unique(hazards);
   box.innerHTML=
-    '<div class="section" style="margin-top:0">Supervisor AI Draft Review</div>'+
+    '<div class="section" style="margin-top:0">Check AI Draft Before Submission</div>'+
     (summary?'<div class="notice small">'+escapeHtml(summary)+'</div>':'')+
     '<div class="small" style="margin:10px 0">Review each AI-generated hazard before submission.</div>'+
     hs.map((h,i)=>'<label style="display:flex;gap:10px;align-items:flex-start;margin:8px 0"><input type="checkbox" class="aiHazardReview" data-i="'+i+'" style="width:auto;margin-top:3px"><span>'+escapeHtml(h)+'</span></label>').join('')+
@@ -71,13 +71,7 @@ function reviewComplete(){
 }
 
 function stopWorkThreshold(){
-  const candidates=[
-    window.SAFE_SITE_RISK_CONFIG?.stopWorkThreshold,
-    (typeof db!=='undefined' ? db?.settings?.riskStopWorkThreshold : null),
-    (typeof db!=='undefined' ? db?.settings?.stopWorkThreshold : null)
-  ];
-  const n=Number(candidates.find(v=>v!==undefined&&v!==null&&v!==''));
-  return Number.isFinite(n)&&n>=1&&n<=25?n:10; // demo default only; configure per site before real-world use
+  return currentRiskStopWorkThreshold();
 }
 function residualScore(){
   return Number(byId('praResidualLikelihood')?.value||0)*Number(byId('praResidualSeverity')?.value||0);
@@ -98,7 +92,7 @@ function ensureResidualNotice(){
   }
 }
 function submitButton(){
-  return [...document.querySelectorAll('button')].find(b=>/Submit Pre-Task Risk Assessment/i.test(b.textContent||''));
+  return byId('praSubmit');
 }
 function updateSubmitGate(){
   const b=submitButton(); if(!b)return;
@@ -112,15 +106,15 @@ function updateSubmitGate(){
       (audit.stopWorkEvents ||= []).push({at:new Date().toISOString(),score,threshold});
     }
   }
-  if(audit&&window.__safeSiteAiDraftPendingReview&&reviewComplete()&&!audit.supervisorReviewCompletedAt){
-    audit.supervisorReviewCompletedAt=new Date().toISOString();
+  if(audit&&window.__safeSiteAiDraftPendingReview&&reviewComplete()&&!audit.preparerDraftCheckedAt){
+    audit.preparerDraftCheckedAt=new Date().toISOString();
   }
   const reviewLocked=!!window.__safeSiteAiDraftPendingReview && !reviewComplete();
-  const locked=reviewLocked||riskLocked;
+  const locked=reviewLocked||riskLocked||riskAssessmentSubmitting;
   b.disabled=locked;
   b.style.opacity=locked?'0.45':'';
   b.style.cursor=locked?'not-allowed':'';
-  b.title=reviewLocked?'Complete Supervisor AI Draft Review before submitting':(riskLocked?'Additional controls and residual-risk reassessment required before submitting':'');
+  b.title=reviewLocked?'Check the AI draft before submitting':(riskLocked?'Additional controls and residual-risk reassessment required before submitting':'');
 }
 function installSubmitGuard(){
   const b=submitButton();
@@ -129,9 +123,9 @@ function installSubmitGuard(){
   b.addEventListener('click',function(e){
     if(window.__safeSiteAiDraftPendingReview && !reviewComplete()){
       e.preventDefault();e.stopImmediatePropagation();
-      status('Complete the Supervisor AI Draft Review before submitting this assessment.',true);
+      status('Check every AI-drafted hazard and control before submitting for supervisor review.',true);
       byId('aiSupervisorReview')?.scrollIntoView({behavior:'smooth',block:'center'});
-      if(typeof toast==='function')toast('Supervisor review is required');
+      if(typeof toast==='function')toast('Check the AI draft before submitting');
       return;
     }
     if(residualBlocked()){
@@ -159,7 +153,7 @@ function applyDraft(draft,source){
       summary:clean(draft?.summary||'')
     },
     stopWorkEvents:[],
-    supervisorReviewCompletedAt:null
+    preparerDraftCheckedAt:null
   };
   if(byId('praHazards')&&hazards.length) byId('praHazards').value=hazards.join('\n');
   if(byId('praControls')&&controls.length) byId('praControls').value=controls.join('\n');
@@ -203,10 +197,21 @@ async function cloudDraft(t){
   if(!data?.draft) throw new Error(data?.error||'No AI draft returned');
   return data.draft;
 }
+let draftGeneration=0;
+window.resetAIRiskDraft=function(){
+  draftGeneration++;
+  window.__safeSiteAiDraftPendingReview=false;
+  window.__safeSiteAiAudit=null;
+  byId('aiSupervisorReview')?.remove();
+  showQuestions([]);
+  status('AI creates a draft only. Supervisor approval is required after submission.');
+  updateSubmitGate();
+};
 window.generateAIRiskAssessment=async function(){
   const t=selectedTask();
   if(!t){if(typeof toast==='function')toast('Select a task first');return;}
   const b=byId('aiRiskGenerateBtn');
+  const generation=++draftGeneration;
   if(b){b.disabled=true;b.textContent='Generating AI draft...';}
   window.__safeSiteAiDraftPendingReview=false;
   updateSubmitGate();
@@ -215,9 +220,11 @@ window.generateAIRiskAssessment=async function(){
   byId('aiSupervisorReview')?.remove();
   try{
     const d=await cloudDraft(t);
+    if(generation!==draftGeneration)return;
     applyDraft(d,'ai');
     if(typeof toast==='function')toast('AI risk assessment draft generated');
   }catch(err){
+    if(generation!==draftGeneration)return;
     console.warn('Safe Site AI unavailable; using local draft',err);
     applyDraft(localDraft(t),'local');
     status('Live AI is not configured or temporarily unavailable, so Safe Site used the local draft. Supervisor review is required.',true);
@@ -233,12 +240,12 @@ function currentAuditPayload(){
   const a=window.__safeSiteAiAudit;
   if(!a?.used)return null;
   return {
-    version:'3.3',
+    version:'4.0',
     aiUsed:true,
     source:a.source,
     generatedAt:a.generatedAt,
     originalDraft:a.originalDraft,
-    supervisorReviewCompletedAt:a.supervisorReviewCompletedAt,
+    preparerDraftCheckedAt:a.preparerDraftCheckedAt,
     stopWorkTriggered:(a.stopWorkEvents||[]).length>0,
     stopWorkEvents:a.stopWorkEvents||[],
     finalReviewed:{
@@ -250,7 +257,6 @@ function currentAuditPayload(){
       residualSeverity:Number(byId('praResidualSeverity')?.value||0),
       residualScore:residualScore(),
       stopWorkThreshold:stopWorkThreshold(),
-      supervisor:clean(byId('praSupervisor')?.value),
       crew:clean(byId('praCrew')?.value),
       reviewedAt:new Date().toISOString()
     }
@@ -272,13 +278,13 @@ function installCloudAuditWrapper(){
           await client.from('audit_log').insert({
             organization_id:org,
             user_id:user,
-            action:'ai_risk_assessment_approved',
+            action:'ai_risk_assessment_submitted',
             entity_type:'safety_record',
             entity_id:row.id,
             metadata:{
               ai_source:audit.source,
               generated_at:audit.generatedAt,
-              supervisor_review_completed_at:audit.supervisorReviewCompletedAt,
+              preparer_draft_checked_at:audit.preparerDraftCheckedAt,
               stop_work_triggered:audit.stopWorkTriggered,
               stop_work_events:audit.stopWorkEvents,
               final_residual_score:audit.finalReviewed.residualScore,
@@ -298,9 +304,9 @@ function wrapSubmit(){
   const original=window.submitRiskAssessment;
   const wrapped=async function(){
     if(!reviewComplete()){
-      status('Complete the Supervisor AI Draft Review before submitting this assessment.',true);
+      status('Check every AI-drafted hazard and control before submitting for supervisor review.',true);
       byId('aiSupervisorReview')?.scrollIntoView({behavior:'smooth',block:'center'});
-      if(typeof toast==='function')toast('Supervisor review is required');
+      if(typeof toast==='function')toast('Check the AI draft before submitting');
       return;
     }
     if(residualBlocked()){
@@ -310,8 +316,7 @@ function wrapSubmit(){
       return;
     }
     const result=await original.apply(this,arguments);
-    window.__safeSiteAiDraftPendingReview=false;
-    window.__safeSiteAiAudit=null;
+    if(result?.id)window.resetAIRiskDraft();
     return result;
   };
   wrapped.__aiWrapped=true;

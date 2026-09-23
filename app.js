@@ -7,6 +7,7 @@ let supabaseClient = null;
 let cloudUser = null;
 let cloudOrganizationId = null;
 let cloudSiteIds = {};
+let cloudRiskThresholds = {};
 let taskLoadSequence = 0;
 let taskContext = null;
 let taskLoadState = 'idle';
@@ -88,7 +89,7 @@ function installRiskAssessmentUI(){
         <div class="notice small">Uses a demo 5×5 risk matrix. Company/site risk criteria should be configured to match your approved procedure before real-world use.</div>
         <div class="card">
           <label>Task<select id="praTask" onchange="loadRiskTaskTemplate()"></select></label>
-          <label>Work Area<input id="praArea" placeholder="Enter the actual work area"></label>
+          <label>Work Area (required)<input id="praArea" required placeholder="Enter the actual work area"></label>
           <label>Hazards<textarea id="praHazards"></textarea></label>
           <div class="section">Initial Risk</div>
           <label>Likelihood<select id="praInitialLikelihood" onchange="updateRiskScores()"><option value="1">1 - Rare</option><option value="2">2 - Unlikely</option><option value="3" selected>3 - Possible</option><option value="4">4 - Likely</option><option value="5">5 - Almost Certain</option></select></label>
@@ -99,9 +100,9 @@ function installRiskAssessmentUI(){
           <label>Likelihood<select id="praResidualLikelihood" onchange="updateRiskScores()"><option value="1">1 - Rare</option><option value="2" selected>2 - Unlikely</option><option value="3">3 - Possible</option><option value="4">4 - Likely</option><option value="5">5 - Almost Certain</option></select></label>
           <label>Severity<select id="praResidualSeverity" onchange="updateRiskScores()"><option value="1">1 - Minor</option><option value="2">2 - Moderate</option><option value="3" selected>3 - Serious</option><option value="4">4 - Major</option><option value="5">5 - Catastrophic</option></select></label>
           <div id="praResidualResult" class="notice"></div>
-          <label>Supervisor Sign-off<input id="praSupervisor" placeholder="Supervisor name"></label>
+          <p class="notice">An authorized reviewer approves and signs separately using their own account.</p>
           <label>Crew Acknowledgement<input id="praCrew" placeholder="Names of participating crew members"></label>
-          <button class="btn" onclick="submitRiskAssessment()">Submit Pre-Task Risk Assessment</button>
+          <button id="praSubmit" class="btn" onclick="submitRiskAssessment()">Submit for Supervisor Review</button>
         </div>`;
       preshift.insertAdjacentElement('beforebegin',section);
     }
@@ -195,13 +196,14 @@ async function loadCloudContext(){
   cloudOrganizationId=m.organization_id;
   const [{data:org,error:oe},{data:sites,error:se}]=await Promise.all([
     client.from('organizations').select('name').eq('id',cloudOrganizationId).single(),
-    client.from('sites').select('id,name').eq('organization_id',cloudOrganizationId).eq('active',true).order('created_at')
+    client.from('sites').select('id,name,risk_stop_work_threshold').eq('organization_id',cloudOrganizationId).eq('active',true).order('created_at')
   ]);
   if(oe) throw oe; if(se) throw se;
   db.settings.company=org.name;
   db.settings.role=pretty(m.role);
   db.sites=(sites||[]).map(x=>x.name);
   cloudSiteIds=Object.fromEntries((sites||[]).map(x=>[x.name,x.id]));
+  cloudRiskThresholds=Object.fromEntries((sites||[]).map(x=>[x.id,x.risk_stop_work_threshold]));
   if(!db.sites.includes(db.settings.site)) db.settings.site=db.sites[0]||'';
   await loadCloudTaskTemplates();
   persist();
@@ -377,7 +379,8 @@ function openAuthenticatedApp(){
 
 async function signOut(){
   if(initSupabase()) await supabaseClient.auth.signOut();
-  cloudUser=null; cloudOrganizationId=null; cloudSiteIds={};
+  cloudUser=null; cloudOrganizationId=null; cloudSiteIds={}; cloudRiskThresholds={};
+  window.resetAIRiskDraft?.();
   ++taskLoadSequence; db.tasks=[]; taskContext=null; taskLoadState='idle';
   header.classList.add('hidden'); nav.classList.add('hidden');
   document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
@@ -636,41 +639,57 @@ function prepRiskAssessment(){
   updateRiskScores();
 }
 function loadRiskTaskTemplate(){
+  window.resetAIRiskDraft?.();
   const t=db.tasks.find(x=>String(x.id)===String(praTask.value));
   praHazards.value=t?.hazards.join('\n')||'';
   praControls.value=t?.controls.join('\n')||'';
 }
+function currentRiskStopWorkThreshold(){
+  return Number(cloudRiskThresholds[currentCloudSiteId()])||10;
+}
+let riskAssessmentSubmitting=false;
 async function submitRiskAssessment(){
+  if(riskAssessmentSubmitting)return;
+  if(!['Administrator','Supervisor','Safety Coordinator','Worker'].includes(db.settings.role)){
+    toast('Your role does not have permission for that action');return;
+  }
+  const area=praArea.value.trim();
+  if(!area){toast('Work Area is required');praArea.focus();return;}
   const t=db.tasks.find(x=>String(x.id)===String(praTask.value));
+  if(!taskTemplatesReady()||!t){toast('Wait for cloud task templates to load before submitting');return;}
   if(!praHazards.value.trim()){toast('Add at least one hazard');return}
   if(!praControls.value.trim()){toast('Add controls before submitting');return}
+  const ratings=[praInitialLikelihood,praInitialSeverity,praResidualLikelihood,praResidualSeverity].map(el=>Number(el.value));
+  if(ratings.some(n=>!Number.isInteger(n)||n<1||n>5)){toast('Choose valid likelihood and severity ratings');return;}
   const initialScore=riskScore(praInitialLikelihood.value,praInitialSeverity.value);
   const residualScore=riskScore(praResidualLikelihood.value,praResidualSeverity.value);
+  if(residualScore>=currentRiskStopWorkThreshold()){
+    toast('STOP — additional controls and reassessment are required before submission');return;
+  }
   const initialLevel=riskLevel(initialScore), residualLevel=riskLevel(residualScore);
-  const title=t?.name||'Custom Task';
+  const title=t.name;
   const details={
-    area:praArea.value,hazards:praHazards.value,controls:praControls.value,
+    area,hazards:praHazards.value.trim(),controls:praControls.value.trim(),taskTemplateId:t.id,
     initialLikelihood:Number(praInitialLikelihood.value),initialSeverity:Number(praInitialSeverity.value),initialScore,initialLevel,
     residualLikelihood:Number(praResidualLikelihood.value),residualSeverity:Number(praResidualSeverity.value),residualScore,residualLevel,
-    supervisor:praSupervisor.value,crew:praCrew.value
+    crew:praCrew.value
   };
+  riskAssessmentSubmitting=true;
+  const button=document.getElementById('praSubmit');
+  if(button)button.disabled=true;
   try{
-    const row=await saveCloudSafetyRecord('pre_task_risk_assessment',title,praArea.value,title,details);
-    if(residualScore>=10){
-      await saveCloudCorrectiveAction({
-        title:`Review ${residualLevel} residual risk before work: ${title}`,
-        description:`Pre-Task Risk Assessment residual score ${residualScore}. Supervisor: ${praSupervisor.value||'Not entered'}.`,
-        priority:residualLevel==='Critical'?'critical':'high',
-        dueDate:new Date().toISOString().slice(0,10),
-        safetyRecordId:row.id
-      });
-    }
-    await loadCloudSafetyData();
+    const row=await saveCloudSafetyRecord('pre_task_risk_assessment',title,area,title,details,'pending_review');
+    praArea.value='';
+    try{await loadCloudSafetyData();}catch(e){console.error(e);}
     logAudit('submitted','pre-task risk assessment',`${title}: ${initialLevel} → ${residualLevel}`);
-    toast(residualScore>=10?`${residualLevel} residual risk saved to cloud — review required`:'Pre-Task Risk Assessment saved to cloud');
+    toast('Risk assessment submitted — Pending Supervisor Review');
     show('dashboard');
+    return row;
   }catch(e){
     console.error(e); toast('Risk assessment could not save to cloud');
+  }finally{
+    riskAssessmentSubmitting=false;
+    if(button)button.disabled=false;
   }
 }
 function prepPreShift(){
@@ -720,18 +739,22 @@ function canApprovePreShift(){
 function preShiftStatusLabel(record){
   return record.cloudStatus==='approved'&&record.approvedBy&&record.approvedAt?'Approved':'Pending Supervisor Review';
 }
+function requiresSafetyReview(record){
+  return ['Pre-Shift','Pre-Task Risk Assessment'].includes(record.type);
+}
 function preShiftReviewHTML(record){
   const esc=value=>String(value||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
-  if(record.type!=='Pre-Shift')return '';
+  if(!requiresSafetyReview(record))return '';
   const approved=preShiftStatusLabel(record)==='Approved';
   return `<div class="card"><h2>${preShiftStatusLabel(record)}</h2>${approved?
     `<p>Signed by authenticated account <strong>${esc(record.approvedBy)}</strong></p><p>${esc(new Date(record.approvedAt).toLocaleString())}</p>`:
     `<p>This submission has not been approved. An authorized reviewer must review the work area, hazards and controls below before signing.</p>${canApprovePreShift()&&record.cloudStatus==='pending_review'?
-      `<button id="approvePreShiftButton" class="btn" onclick="approvePreShift('${esc(record.id)}')">Approve &amp; Sign as My Account</button>`:''}`}</div>`;
+      `<button id="approvePreShiftButton" class="btn" onclick="approvePreShift('${esc(record.id)}','${record.type==='Pre-Shift'?'pre_shift':'pre_task_risk_assessment'}')">Approve &amp; Sign as My Account</button>`:''}`}</div>`;
 }
 const preShiftApprovals=new Set();
-async function approvePreShift(id){
-  if(!canApprovePreShift()){toast('Your role cannot approve pre-shifts');return;}
+async function approvePreShift(id,recordType='pre_shift'){
+  if(!['pre_shift','pre_task_risk_assessment'].includes(recordType))return;
+  if(!canApprovePreShift()){toast('Your role cannot approve safety records');return;}
   if(preShiftApprovals.has(id))return;
   preShiftApprovals.add(id);
   const button=document.getElementById('approvePreShiftButton');
@@ -742,13 +765,13 @@ async function approvePreShift(id){
     if(authError||!auth?.user)throw new Error('Sign in required');
     // Send only the transition. The database validates membership and stamps identity/time.
     const {data:row,error}=await client.from('safety_records').update({status:'approved'})
-      .eq('id',id).eq('organization_id',cloudOrganizationId).eq('record_type','pre_shift')
+      .eq('id',id).eq('organization_id',cloudOrganizationId).eq('record_type',recordType)
       .eq('status','pending_review').select('id,approved_by,approved_at').single();
     if(error||!row?.approved_by||!row?.approved_at)throw error||new Error('Approval not saved');
     try{
       await loadCloudSafetyData();
       if(typeof openRecordDetail==='function')await openRecordDetail(id);
-      toast('Pre-shift approved and signed');
+      toast(`${recordType==='pre_shift'?'Pre-shift':'Risk assessment'} approved and signed`);
     }catch(e){
       console.error(e);
       toast('Approval saved. Reload to see the signed record.');
