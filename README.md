@@ -60,7 +60,33 @@ description, priority and optional due date. Failed saves retain entries for ret
 Cancel, site changes and sign-out discard drafts. A successful save followed by a
 list refresh failure is reported as saved, preventing an unnecessary second insert.
 
-## Tests
+## Inspection, Incident and Near Miss reliability
+
+Apply `database/field_submission.sql` before deploying `field-submissions.js`
+(applied as `atomic_field_submissions`). The authenticated, SECURITY INVOKER RPC
+saves an inspection and its deficiency action in one transaction, retaining RLS.
+Pass inspections create no action; Out of Service creates a critical action.
+Work Area is required; deficiencies require notes; incidents require location and
+description. Incident and Near Miss retain distinct record types.
+
+Each submission attempt has a UUID. Double clicks are ignored; an uncertain reply
+locks the original entries for a retry with the same UUID and payload. Exact
+replays return the existing record without creating another action. Database
+rejections unlock entries for correction. Drafts/retry IDs are held in the current
+page only and cleared on site changes/sign-out; after reloading an uncertain
+submission, check Recent Activity before re-entering it. Successful saves followed
+by refresh failures are explicitly reported as saved.
+
+Photo evidence uploads remain unavailable. The old forms saved only filenames;
+the upload controls are now hidden and this limitation is stated on each form.
+No previously stored records or filenames are changed.
+
+`tests/field-submission-database.sql` runs 28 rollback assertions including a forced
+action-insert failure, replay checks, organization boundaries and Client Viewer
+read-only access. The five-role browser suite also tests all three field forms,
+uncertain-response retries and Client Viewer screen restrictions.
+
+## Automated checks
 
 - `node --test tests/worker-flow.test.cjs`: form validation, cloud template loading,
   roles, status display, failures and conditional approval updates.

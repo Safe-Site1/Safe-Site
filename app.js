@@ -378,6 +378,7 @@ function openAuthenticatedApp(){
 }
 
 async function signOut(){
+  window.clearFieldDrafts?.();
   cancelNewAction();
   if(initSupabase()) await supabaseClient.auth.signOut();
   cloudUser=null; cloudOrganizationId=null; cloudSiteIds={}; cloudRiskThresholds={};
@@ -473,6 +474,7 @@ function populateSiteSwitcher(){
   siteSwitcher.innerHTML=db.sites.map(s=>`<option ${s===db.settings.site?'selected':''}>${s}</option>`).join('');
 }
 async function switchSite(){
+  window.clearFieldDrafts?.();
   cancelNewAction();
   db.settings.site=siteSwitcher.value;
   const loading=loadCloudTaskTemplates();
@@ -786,42 +788,7 @@ async function approvePreShift(id,recordType='pre_shift'){
     if(button)button.disabled=false;
   }
 }
-async function submitInspection(){
-  const details={condition:inspCond.value,notes:inspNotes.value,photo:inspPhoto.files[0]?.name||null};
-  try{
-    const row=await saveCloudSafetyRecord('inspection',inspEquip.value,'',inspEquip.value,details);
-    if(inspCond.value!=='Pass'){
-      await saveCloudCorrectiveAction({
-        title:`Inspection deficiency: ${inspEquip.value}`,
-        description:inspNotes.value||inspCond.value,
-        priority:inspCond.value==='Out of Service'?'critical':'high',
-        dueDate:new Date(Date.now()+7*86400000).toISOString().slice(0,10),
-        safetyRecordId:row.id
-      });
-    }
-    await loadCloudSafetyData();
-    logAudit('submitted','inspection',inspEquip.value);
-    toast(inspCond.value==='Pass'?'Inspection saved to cloud':'Inspection and corrective action saved to cloud');
-    show('dashboard');
-  }catch(e){
-    console.error(e); toast('Inspection could not save to cloud');
-  }
-}
-async function submitIncident(){
-  const displayType=incType.value;
-  const recordType=displayType==='Near Miss'?'near_miss':'incident';
-  const title=incLocation.value||displayType;
-  const details={description:incDesc.value,immediateAction:incAction.value,people:incPeople.value,photo:incPhoto.files[0]?.name||null};
-  try{
-    await saveCloudSafetyRecord(recordType,title,incLocation.value,'',details);
-    await loadCloudSafetyData();
-    logAudit('submitted',displayType,title);
-    toast(`${displayType} saved to cloud`);
-    show('dashboard');
-  }catch(e){
-    console.error(e); toast(`${displayType} could not save to cloud`);
-  }
-}
+// Inspection and incident submission handlers live in field-submissions.js.
 
 function renderActions(){
   actionsList.innerHTML=db.actions.filter(a=>a.site===db.settings.site).map(a=>`<div class="card"><div class="row"><div class="grow"><b>${a.description}</b><div class="small muted">${a.owner} · Due ${a.due}</div></div>${badge(a.status)}</div><div class="quick" style="margin-top:10px"><button onclick="setAction('${a.id}','in_progress')">Start</button><button onclick="setAction('${a.id}','closed')">Close</button></div></div>`).join('')||'<div class="card muted">No corrective actions.</div>';

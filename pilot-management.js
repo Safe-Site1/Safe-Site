@@ -378,46 +378,5 @@
     return baseShow(id);
   };
 
-  // Pilot polish rebuild: inspection Work Area / Location is saved directly to cloud.
-  window.submitInspection = async function(){
-    const area = (document.getElementById('inspArea')?.value || '').trim();
-    const details = {
-      area,
-      workArea: area,
-      condition: inspCond.value,
-      notes: inspNotes.value,
-      photo: inspPhoto.files[0]?.name || null
-    };
-    try{
-      const row = await saveCloudSafetyRecord(
-        'inspection',
-        inspEquip.value,
-        area,
-        inspEquip.value,
-        details
-      );
-
-      if(inspCond.value !== 'Pass'){
-        await saveCloudCorrectiveAction({
-          title:`Inspection deficiency: ${inspEquip.value}`,
-          description:inspNotes.value || inspCond.value,
-          priority:inspCond.value === 'Out of Service' ? 'critical' : 'high',
-          dueDate:new Date(Date.now()+7*86400000).toISOString().slice(0,10),
-          safetyRecordId:row.id
-        });
-      }
-
-      await loadCloudSafetyData();
-      logAudit('submitted','inspection',inspEquip.value);
-      toast(inspCond.value === 'Pass'
-        ? 'Inspection saved to cloud'
-        : 'Inspection and corrective action saved to cloud');
-      show('dashboard');
-    }catch(e){
-      console.error(e);
-      toast('Inspection could not save to cloud');
-    }
-  };
-
   ensurePilotUI();
 })();

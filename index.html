@@ -238,8 +238,9 @@ hr{border:0;border-top:1px solid #1f3a46}
         <label>Work Area / Location<input id="inspArea" placeholder="Level, heading, shop, surface area..."></label>
         <label>Condition<select id="inspCond"><option>Pass</option><option>Deficiency Found</option><option>Out of Service</option></select></label>
         <label>Notes<textarea id="inspNotes"></textarea></label>
-        <input id="inspPhoto" type="file" accept="image/*">
-        <button class="btn" onclick="submitInspection()">Submit Inspection</button>
+        <p class="small muted">Photo uploads are not available yet. Describe any evidence in Notes.</p>
+        <input id="inspPhoto" type="file" accept="image/*" hidden>
+        <button id="inspectionSubmit" class="btn" onclick="submitInspection()">Submit Inspection</button>
       </div>
     </section>
 
@@ -252,8 +253,9 @@ hr{border:0;border-top:1px solid #1f3a46}
         <label>Description<textarea id="incDesc"></textarea></label>
         <label>Immediate Action<textarea id="incAction"></textarea></label>
         <label>People Involved<input id="incPeople"></label>
-        <input id="incPhoto" type="file" accept="image/*">
-        <button class="btn" onclick="submitIncident()">Submit Report</button>
+        <p class="small muted">Photo uploads are not available yet. Describe any evidence in Description.</p>
+        <input id="incPhoto" type="file" accept="image/*" hidden>
+        <button id="incidentSubmit" class="btn" onclick="submitIncident()">Submit Report</button>
       </div>
     </section>
 
@@ -330,9 +332,9 @@ hr{border:0;border-top:1px solid #1f3a46}
 <div id="buildMarker" style="display:none">pilot-polish-rebuild-20260909b</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=20260923e"></script>
+<script src="app.js?v=20260923f"></script>
 <script src="invitation-bootstrap-guard.js?v=20260922a"></script>
-  <script src="pilot-management.js?v=20260923d"></script>
+  <script src="pilot-management.js?v=20260923f"></script>
 <script src="team-permissions.js?v=20260922a"></script>
   <script src="role-access-v4.js?v=20260912a"></script>
 <script src="action-closeout.js?v=20260923d"></script>
@@ -359,6 +361,7 @@ hr{border:0;border-top:1px solid #1f3a46}
 <script src="qualification-row-renderer-fix.js?v=20260912a"></script>
 <script src="ai-risk-assessment.js?v=20260923c"></script>
 <script src="client-viewer-pilot-fix.js?v=20260918a"></script>
+<script src="field-submissions.js?v=20260923a"></script>
 </body>
 </html>
 

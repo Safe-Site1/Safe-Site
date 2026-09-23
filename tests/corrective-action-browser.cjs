@@ -19,12 +19,18 @@ const root=path.join(__dirname,'..');
    await page.addInitScript(()=>{
     window.actions=[{id:'late',due_date:'2030-01-01',description:'LATE'},{id:'closed',due_date:'2020-01-01',description:'OLD',status:'closed'},
      {id:'early',due_date:'2021-01-01',description:'EARLY'}].map(a=>({organization_id:'org',site_id:'site',title:'Duplicate title',status:'open',priority:'high',created_at:'2026-01-01',...a}));
-    window.patches=[];window.inserts=[];
-    window.testClient={auth:{getSession:async()=>({data:{session:null}})},from(table){
+    window.patches=[];window.inserts=[];window.fieldCalls=[];window.fieldRecords=[];
+    window.testClient={auth:{getSession:async()=>({data:{session:null}})},async rpc(name,p){
+     if(name!=='submit_field_record')return {data:null,error:null};
+     fieldCalls.push(p);
+     if(!fieldRecords.some(r=>r.id===p.p_id))fieldRecords.push({id:p.p_id,organization_id:p.p_organization_id,site_id:p.p_site_id,record_type:p.p_type,title:p.p_title,work_area:p.p_area,data:p.p_data,status:'submitted',created_at:new Date().toISOString()});
+     if(window.loseFieldResponse){window.loseFieldResponse=false;return {error:{message:'Lost response'}};}
+     return {data:p.p_id,error:null};
+    },from(table){
      let filters=[],patch,insert,single=false;
      const q={select(){return q;},eq(k,v){filters.push([k,v]);return q;},order(){return q;},insert(p){insert=p;return q;},update(p){patch=p;return q;},single(){single=true;return q;},
       then(resolve,reject){return Promise.resolve().then(()=>{
-       let data=table==='corrective_actions'?actions.filter(a=>filters.every(([k,v])=>a[k]===v)):[];
+       let data=(table==='corrective_actions'?actions:table==='safety_records'?fieldRecords:[]).filter(a=>filters.every(([k,v])=>a[k]===v));
        if(insert&&table==='corrective_actions'){
         inserts.push(insert);if(window.rejectCreate){window.rejectCreate=false;return {data:null,error:{message:'Save failed'}};}
         const row={id:'created',created_at:new Date().toISOString(),...insert};actions.push(row);data=[row];
@@ -34,13 +40,39 @@ const root=path.join(__dirname,'..');
        return {data:single?data[0]||null:data,error:null};
       }).then(resolve,reject);}};return q;}};
    });
-   await page.goto('http://safe-site.test/');
+   await page.goto('https://safe-site.test/');
    await page.waitForFunction(()=>window.__actionCloseoutActionsWrapped);
    await page.evaluate(async role=>{
-    cloudOrganizationId='org';cloudSiteIds={Pilot:'site'};db.settings={company:'Test',site:'Pilot',role};db.workers=[];db.records=[];
+    cloudUser={id:'pilot-user'};cloudOrganizationId='org';cloudSiteIds={Pilot:'site'};db.settings={company:'Test',site:'Pilot',role};db.workers=[];db.records=[];
     document.getElementById('header').classList.remove('hidden');document.getElementById('nav').classList.remove('hidden');
     await loadCloudSafetyData();show('actions');
    },role);
+   if(role==='Client Viewer'){
+    await page.evaluate(async()=>{await submitInspection();await submitIncident();show('inspection');});
+    assert.equal(await page.evaluate(()=>fieldCalls.length),0);assert.equal(await page.locator('#inspection').isVisible(),false);
+    await page.evaluate(()=>show('reports'));assert.equal(await page.locator('#reports').isVisible(),true);
+   }else{
+    await page.evaluate(()=>show('inspection'));
+    await page.locator('#inspectionSubmit').click();assert.equal(await page.evaluate(()=>fieldCalls.length),0);
+    await page.locator('#inspArea').fill('PILOT TEST ONLY — inspection');
+    await page.locator('#inspCond').selectOption('Deficiency Found');
+    await page.locator('#inspectionSubmit').click();assert.equal(await page.evaluate(()=>fieldCalls.length),0);
+    await page.locator('#inspNotes').fill('Synthetic defect');
+    await page.evaluate(()=>{window.loseFieldResponse=true;});await page.locator('#inspectionSubmit').click();
+    await page.waitForFunction(()=>!loseFieldResponse&&!document.getElementById('inspectionSubmit').disabled);
+    assert.equal(await page.locator('#inspNotes').isDisabled(),true);
+    await page.locator('#inspectionSubmit').click();await page.waitForFunction(()=>!document.getElementById('dashboard').classList.contains('hidden'));
+    assert.equal(await page.evaluate(()=>fieldCalls[0].p_id===fieldCalls[1].p_id),true);
+    assert.equal(await page.evaluate(()=>fieldRecords.length),1);
+    for(const kind of ['Incident','Near Miss']){
+     await page.evaluate(()=>show('incident'));await page.locator('#incType').selectOption(kind);
+     await page.locator('#incidentSubmit').click();
+     await page.locator('#incLocation').fill('Pilot test bay');await page.locator('#incDesc').fill('Synthetic '+kind);
+     await page.locator('#incidentSubmit').click();await page.waitForFunction(()=>!document.getElementById('dashboard').classList.contains('hidden'));
+    }
+    assert.deepEqual(await page.evaluate(()=>fieldRecords.map(r=>r.record_type)),['inspection','incident','near_miss']);
+   }
+   await page.evaluate(()=>show('actions'));
    if(['Worker','Client Viewer'].includes(role)){
     await page.evaluate(async()=>{addAction();await submitNewAction();});
     assert.equal(await page.locator('#actionCreateForm').isVisible(),false);

@@ -6,6 +6,48 @@ const vm=require('node:vm');
 const root=path.join(__dirname,'..');
 const source=name=>fs.readFileSync(path.join(root,name),'utf8');
 
+test('field submissions validate, deduplicate clicks and retry uncertain saves with unchanged ID',async()=>{
+  const f=fixture();f.run("cloudUser={id:'worker'}");f.load('field-submissions.js');
+  f.element('inspEquip').value='Bolter';f.element('inspCond').value='Deficiency Found';
+  const calls=[];let release;f.client.rpc=async(name,args)=>{calls.push(args);return new Promise(r=>release=r);};
+  await f.ctx.submitInspection();assert.equal(calls.length,0);
+  f.element('inspArea').value=' Area ';await f.ctx.submitInspection();assert.equal(calls.length,0);
+  f.element('inspNotes').value='Pilot defect';
+  const first=f.ctx.submitInspection();await f.ctx.submitInspection();assert.equal(calls.length,1);
+  release({error:{message:'Response lost'}});await first;assert.equal(f.element('inspArea').disabled,true);
+  f.element('inspNotes').value='Tampered while pending';
+  f.client.rpc=async(name,args)=>{calls.push(args);return {data:args.p_id,error:null};};
+  await f.ctx.submitInspection();assert.equal(calls.length,2);assert.deepEqual(calls[0],calls[1]);
+  assert.equal(calls[0].p_area,'Area');assert.equal(calls[0].p_data.notes,'Pilot defect');
+  assert.equal(f.element('inspArea').value,'');assert.equal(f.element('inspArea').disabled,false);
+});
+
+test('field submission rejection allows correction; successful save with refresh failure does not invite retry',async()=>{
+  const f=fixture();f.run("cloudUser={id:'worker'}");f.load('field-submissions.js');
+  f.element('incType').value='Near Miss';f.element('incLocation').value='Bay';f.element('incDesc').value='Pilot near miss';
+  f.client.rpc=async()=>({error:{code:'23514',message:'Invalid details'}});
+  await f.ctx.submitIncident();assert.equal(f.element('incDesc').disabled,false);assert.equal(f.element('incDesc').value,'Pilot near miss');
+  f.client.rpc=async(name,args)=>({data:args.p_id});f.ctx.loadCloudSafetyData=async()=>{throw new Error('Refresh failed');};
+  await f.ctx.submitIncident();assert.equal(f.element('incDesc').value,'');assert.match(f.messages.at(-1),/Report saved/);
+});
+
+test('field submission guards Client Viewer and missing authentication, and does not silently save filename-only photos',async()=>{
+  const f=fixture();f.load('field-submissions.js');let calls=0;f.client.rpc=async()=>{calls++;};
+  f.run("db.settings.role='Client Viewer';cloudUser={id:'viewer'}");await f.ctx.submitIncident();await f.ctx.submitInspection();
+  f.run("db.settings.role='Worker';cloudUser=null");await f.ctx.submitIncident();
+  f.run("cloudUser={id:'worker'}");f.element('incType').value='Incident';f.element('incLocation').value='Bay';f.element('incDesc').value='Test';
+  f.element('incPhoto').files=[{name:'not-uploaded.jpg'}];await f.ctx.submitIncident();assert.equal(calls,0);assert.match(f.messages.at(-1),/Photo uploads/);
+});
+
+test('site/signout draft reset ignores a late field submission response',async()=>{
+  const f=fixture();f.run("cloudUser={id:'worker'}");f.load('field-submissions.js');let release;
+  f.element('incType').value='Incident';f.element('incLocation').value='Bay';f.element('incDesc').value='Test';
+  f.client.rpc=async(name,args)=>new Promise(r=>{release=()=>r({data:args.p_id});});
+  const pending=f.ctx.submitIncident();f.ctx.clearFieldDrafts();f.run("db.settings.site='B'");
+  f.element('incDesc').value='New site draft';release();await pending;
+  assert.equal(f.element('incDesc').value,'New site draft');assert.equal(f.ctx.lastScreen,undefined);
+});
+
 test('manual actions validate dates, preserve failed drafts and block duplicate in-flight saves',async()=>{
   const f=fixture();f.run("db.settings.role='Supervisor'");f.ctx.addAction();
   f.element('actionCreateTitle').value='Test action';f.element('actionCreateDescription').value='Details';
