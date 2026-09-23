@@ -274,7 +274,7 @@
       reportsBody.innerHTML = rows.length ? rows.map(r=>`
         <div class="recordCard" onclick="openRecordDetail('${esc(r.id)}')">
           <div class="recordType">${esc(r.type)}</div>
-          <div class="row"><div class="grow"><b>${esc(r.title)}</b></div><span class="badge ${requiresSafetyReview(r)&&preShiftStatusLabel(r)!=='Approved'?'warn':'ok'}">${requiresSafetyReview(r)?preShiftStatusLabel(r):'Completed'}</span></div>
+          <div class="row"><div class="grow"><b>${esc(r.title)}</b></div><span class="badge ${requiresSafetyReview(r)?(preShiftStatusLabel(r)!=='Approved'?'warn':'ok'):'info'}">${requiresSafetyReview(r)?preShiftStatusLabel(r):esc(r.cloudStatus?detailLabel(r.cloudStatus):'Status unavailable')}</span></div>
           <div class="recordMeta">
             <span class="small muted">${esc(r.details?.area || r.details?.workArea || 'No work area')}</span>
             <span class="small muted">• ${esc(new Date(r.time).toLocaleString())}</span>

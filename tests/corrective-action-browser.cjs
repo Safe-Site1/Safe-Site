@@ -71,6 +71,10 @@ const root=path.join(__dirname,'..');
      await page.locator('#incidentSubmit').click();await page.waitForFunction(()=>!document.getElementById('dashboard').classList.contains('hidden'));
     }
     assert.deepEqual(await page.evaluate(()=>fieldRecords.map(r=>r.record_type)),['inspection','incident','near_miss']);
+    if(role!=='Worker'){
+     await page.evaluate(()=>{show('reports');reportTab='records';renderReports();});
+     assert.deepEqual(await page.locator('#reportsBody .badge').allTextContents(),['Submitted','Submitted','Submitted']);
+    }
    }
    await page.evaluate(()=>show('actions'));
    if(['Worker','Client Viewer'].includes(role)){

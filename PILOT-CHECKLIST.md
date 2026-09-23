@@ -8,6 +8,8 @@
 - Manual actions: on-page form, validation, role restrictions and failed-save recovery. Live labeled creation completed; that test action remains open.
 - Inspection submission: database transaction includes the linked deficiency action. Forced action failure rolls back the inspection; identical retries do not duplicate it. Work Area and authenticated creator preserved.
 - Incident/Near Miss: distinct record types, required location/description, duplicate-click and uncertain-response protection.
+- Live Supervisor checks: inspection `928f8135-4a9f-4e21-9d70-b8c5031132a7` saved with exactly one linked action; Incident `12f50dc5-8285-4dad-b60f-5f32e2759e8f` and Near Miss `f9d00294-129a-4a1b-8a26-176a435f48c1` saved separately. All three retain the authenticated creator and submitted status. The synthetic inspection action remains open.
+- Reports display the actual saved status rather than labeling all field records Completed.
 - Worker isolation and Client Viewer read-only report access: real database rollback fixtures plus shipped-page browser tests. Tests use mocked cloud transport in the browser; database permission checks use real RLS separately.
 
 ## Remaining before expanding the pilot
