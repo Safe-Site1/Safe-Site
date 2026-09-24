@@ -15,6 +15,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;background:#0c1116;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--text)}
 button,input,select,textarea{font:inherit}
+#enterpriseOnboarding button:disabled{opacity:.5;cursor:not-allowed}
 .app{max-width:460px;min-height:100vh;margin:auto;background:linear-gradient(#07131a,#091820);position:relative}
 .header{position:sticky;top:0;z-index:20;padding:14px 16px 10px;background:rgba(7,19,26,.97);border-bottom:1px solid #17313d}
 .brand{display:flex;align-items:center;gap:10px;font-weight:900;letter-spacing:.8px}
@@ -114,6 +115,7 @@ hr{border:0;border-top:1px solid #1f3a46}
     </section>
 
     <section id="workers" class="screen hidden">
+      <button class="btn secondary" data-onboarding-entry hidden onclick="show('enterpriseOnboarding')">Enterprise Bulk Onboarding</button>
       <div class="topline"><h1>Workers</h1><button id="addWorkerBtn" class="btn" style="width:auto;padding:10px 14px" onclick="show('workerEditor')">+ Add</button></div>
       <input id="workerSearch" placeholder="Search workers..." oninput="renderWorkers()">
       <div id="workersList"></div>
@@ -295,6 +297,7 @@ hr{border:0;border-top:1px solid #1f3a46}
     </section>
 
     <section id="admin" class="screen hidden">
+      <button class="btn secondary" data-onboarding-entry hidden onclick="show('enterpriseOnboarding')">Enterprise Bulk Onboarding</button>
       <h1>Administration</h1>
       <div class="card">
         <label>Company<input id="companyName"></label>
@@ -321,6 +324,50 @@ hr{border:0;border-top:1px solid #1f3a46}
         <div class="item row"><div class="grow"><b>Verified signatures</b><div class="small muted">Approvals and action closeouts store the authenticated account and server timestamp. Local activity is not a complete audit history.</div></div><span class="badge info">Cloud records</span></div>
       </div>
       <button class="btn danger" onclick="resetDemo()">Reset Demo Data</button>
+    </section>
+    <section id="enterpriseOnboarding" class="screen hidden">
+      <button class="btn secondary" onclick="show('workers')">Back to Workers</button>
+      <h1>Enterprise Bulk Onboarding</h1>
+      <p class="muted">Import workforce records, training and site requirements, then securely attach certificates.</p>
+      <div class="card">
+        <h2>1. Upload workbook</h2>
+        <p class="small">Use Workers, Qualifications, Site Requirements and Document Index sheets. Keep employee numbers as text (including leading zeros). Dates: YYYY-MM-DD. Sites must already exist. Maximum: 2,000 workers, 20,000 qualifications, 5,000 requirements and 20,000 documents per batch.</p>
+        <button id="onboardingTemplate" class="btn secondary">Download blank workbook template</button>
+        <label>Workbook (.xlsx, up to 20 MB)<input id="onboardingWorkbook" type="file" accept=".xlsx"></label>
+        <button id="onboardingStage" class="btn">Validate workbook</button>
+        <p class="small muted">Validation creates an isolated batch; it does not change worker records. If the response is lost, refresh recent batches before uploading again.</p>
+      </div>
+      <div class="card">
+        <label>Recent batches (latest 100)<select id="onboardingHistory"></select></label>
+        <button id="onboardingRefresh" class="btn secondary">Refresh / recover batch</button>
+      </div>
+      <progress id="onboardingProgress" aria-label="Onboarding in progress" hidden style="width:100%"></progress>
+      <p id="onboardingStatus" role="status" aria-live="polite"></p>
+      <div id="onboardingReview" hidden>
+        <h2>2. Review and confirm</h2>
+        <h3 id="onboardingBatchTitle" style="overflow-wrap:anywhere"></h3>
+        <p id="onboardingBatchId" class="small" style="overflow-wrap:anywhere"></p>
+        <div id="onboardingCounts" class="grid"></div>
+        <p id="onboardingOutcome"></p>
+        <div id="onboardingIssues" class="card" style="max-height:400px;overflow:auto;overflow-wrap:anywhere"></div>
+        <p id="onboardingIssueLimit" class="small muted"></p>
+        <details class="card"><summary>Review staged values and all row issues</summary>
+          <label>Sheet<select id="onboardingRowKind"><option value="worker">Workers</option><option value="qualification">Qualifications</option><option value="requirement">Site Requirements</option><option value="document">Document Index</option></select></label>
+          <label>Page (50 rows)<input id="onboardingRowPage" type="number" min="1" step="1" value="1"></label>
+          <button id="onboardingLoadRows" class="btn secondary">Load rows</button>
+          <div id="onboardingRows" style="overflow-wrap:anywhere"></div>
+        </details>
+        <label id="onboardingConfirmLabel"><input id="onboardingConfirm" type="checkbox" style="width:auto"> I reviewed this batch and explicitly approve updates to existing workers, qualifications and site requirements.</label>
+        <button id="onboardingCommit" class="btn">Confirm and import records</button>
+        <p class="small muted">Record import is atomic. If confirmation is lost, refresh this batch to recover its result. Never create a replacement batch just to retry a commit.</p>
+      </div>
+      <div id="onboardingUploads" class="card" hidden>
+        <h2>3. Upload documents</h2>
+        <p class="small">Select files with exact, unique filenames from Document Index. Files are linked by employee number. PDF, JPEG, PNG or WebP; maximum 10 MB each. Registered documents are skipped on retry. Files are private and are never overwritten.</p>
+        <label>Certificate files<input id="onboardingFiles" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp"></label>
+        <button id="onboardingUpload" class="btn">Upload / retry pending documents</button>
+        <div id="onboardingDocumentRows" style="overflow-wrap:anywhere;max-height:450px;overflow:auto"></div>
+      </div>
     </section>
   </main>
 
@@ -369,6 +416,9 @@ hr{border:0;border-top:1px solid #1f3a46}
 <script src="record-photos.js?v=20260923a"></script>
 <script src="customer-projects.js?v=20260924a"></script>
 <script src="cloud-task-editor.js?v=20260924a"></script>
+<script src="vendor/xlsx-0.20.3.min.js"></script>
+<script src="enterprise-onboarding-core.js?v=20260924a"></script>
+<script src="enterprise-onboarding.js?v=20260924a"></script>
 </body>
 </html>
 

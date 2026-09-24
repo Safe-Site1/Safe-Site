@@ -69,6 +69,8 @@ function ensureTeamScreens(){
       <div class="card">
         <label>Full Name<input id="inviteFullName" placeholder="Full name"></label>
         <label>Email<input id="inviteEmail" type="email" placeholder="supervisor@company.com"></label>
+        <label>Employee Number (worker invitations)<input id="inviteEmployeeNumber" placeholder="Exact employee number from Worker Passport"></label>
+        <p class="small muted">For an imported worker, enter their employee number to link the invitation to the existing passport. Other roles ignore this field.</p>
         <label>Role<select id="inviteRole">
           <option value="supervisor">Supervisor</option>
           <option value="administrator">Administrator</option>
@@ -218,7 +220,8 @@ window.createRealInvitation=async function(){
 
   const client=initSupabase();
   const {data,error}=await client.rpc('create_team_invitation',{
-    p_email:email,p_full_name:fullName,p_role:role,p_site_id:siteId
+    p_email:email,p_full_name:fullName,p_role:role,p_site_id:siteId,
+    p_employee_number:role==='worker'?(document.getElementById('inviteEmployeeNumber').value.trim()||null):null
   });
 
   if(error){

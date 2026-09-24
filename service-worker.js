@@ -1,4 +1,4 @@
-const CACHE='safe-site-team-permissions-v1';
+const CACHE='safe-site-enterprise-onboarding-v2';
 const STATIC_ASSETS=['./manifest.webmanifest','./icon-192.svg','./icon-512.svg'];
 
 self.addEventListener('install',event=>{
@@ -15,6 +15,8 @@ self.addEventListener('activate',event=>{
 self.addEventListener('fetch',event=>{
   const req=event.request;
   const url=new URL(req.url);
+  // Never cache authenticated database responses or private workforce documents.
+  if(url.origin!==self.location.origin || req.method!=='GET')return;
   if(req.mode==='navigate' || url.pathname.endsWith('/index.html') ||
      url.pathname.endsWith('/app.js') || url.pathname.endsWith('/pilot-management.js') ||
      url.pathname.endsWith('/team-permissions.js')){
