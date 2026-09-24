@@ -226,6 +226,23 @@ test('invitation survives sign-up confirmation, reload and failed acceptance; cl
   assert.equal(returned.location.search,'?view=welcome');assert.equal(returned.location.hash,'#confirm');
 });
 
+test('lost invitation acceptance response retries the receipt and clears pending token only after confirmation',async()=>{
+  const storage=new Map(),f=fixture({storage,url:'https://safe-site.test/?invite=receipt'});
+  let accepted=false,writes=0,bootstraps=0;
+  f.ctx.ensureCloudTenant=async()=>bootstraps++;
+  f.load('invitation-bootstrap-guard.js');
+  f.client.rpc=async(name,args)=>{
+    assert.equal(name,'accept_team_invitation');assert.equal(args.p_token,'receipt');
+    if(!accepted){accepted=true;writes++;return {error:new Error('Response lost after commit')};}
+    return {data:[{organization_id:'org',role:'worker',site_id:'site-a'}],error:null};
+  };
+  await assert.rejects(f.ctx.ensureCloudTenant(),/Response lost/);
+  assert.equal(storage.get('safeSitePendingInvitation'),'receipt');assert.equal(bootstraps,0);
+  await f.ctx.ensureCloudTenant();
+  assert.equal(writes,1);assert.equal(bootstraps,1);
+  assert.equal(storage.has('safeSitePendingInvitation'),false);assert.equal(f.location.search,'');
+});
+
 test('guard replaces the registered restore handler and restores invitation before tenant bootstrap',async()=>{
   const f=fixture({url:'https://safe-site.test/?invite=token&keep=yes'}),events=[];
   const old=f.ctx.restoreSession;

@@ -89,7 +89,50 @@ do $$declare b uuid;wid uuid;doc uuid;again uuid;token uuid;begin
  perform set_config('request.jwt.claim.sub',pg_temp.f('worker')::text,true);
  perform set_config('request.jwt.claims',jsonb_build_object('sub',pg_temp.f('worker'),'email','changed@example.test')::text,true);
  perform public.accept_team_invitation(token);
+ perform public.accept_team_invitation(token);
+ perform pg_temp.ok(true,'accepted invitation retries recover a lost response');
  perform pg_temp.ok((select user_id=pg_temp.f('worker') and email='changed@example.test' from public.workers where id=wid),'employee-number invitation links existing passport despite different display name');
+ perform pg_temp.ok((select count(*)=1 from public.workers where organization_id=pg_temp.f('org')),'worker sees only own passport');
+ perform pg_temp.ok((select count(*)=1 from public.qualifications where organization_id=pg_temp.f('org')),'worker sees only own training');
+ perform pg_temp.ok((select count(*)=1 from public.documents where organization_id=pg_temp.f('org')),'worker can read own certificate metadata');
+ perform pg_temp.ok((select count(*)=1 from public.qualification_requirements where organization_id=pg_temp.f('org')),'worker can read site training requirements');
+ perform set_config('request.jwt.claim.sub',pg_temp.f('outsider')::text,true);
+ begin
+   perform public.accept_team_invitation(token);
+   raise exception 'FAIL: accepted token allowed another account';
+ exception when raise_exception then
+   if SQLERRM<>'Invitation is no longer active' then raise; end if;
+ end;
+ perform pg_temp.ok(true,'accepted token cannot be replayed by another account with same email claim');
+ perform set_config('request.jwt.claim.sub',pg_temp.f('worker')::text,true);
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',pg_temp.f('worker'),'email','wrong@example.test')::text,true);
+ begin
+   perform public.accept_team_invitation(token);
+   raise exception 'FAIL: accepted token allowed changed email';
+ exception when raise_exception then
+   if SQLERRM<>'Invitation is no longer active' then raise; end if;
+ end;
+ perform pg_temp.ok(true,'accepted token still checks invited email');
 end $$;
+reset role;
+update public.organization_memberships set active=false where organization_id=pg_temp.f('org') and user_id=pg_temp.f('worker');
+set local role authenticated;
+select set_config('request.jwt.claim.sub',pg_temp.f('worker')::text,true);
+select set_config('request.jwt.claims',jsonb_build_object('sub',pg_temp.f('worker'),'email','changed@example.test')::text,true);
+reset role;
+-- Capture the receipt as fixture owner; worker RLS intentionally hides invitation tokens.
+insert into fixture(key,id) select 'accepted_token',token from public.team_invitations where organization_id=pg_temp.f('org') and accepted_by=pg_temp.f('worker');
+set local role authenticated;
+do $$begin
+ begin
+   perform public.accept_team_invitation(pg_temp.f('accepted_token'));
+   raise exception 'FAIL: retry restored revoked membership';
+ exception when raise_exception then
+   if SQLERRM<>'Invitation access has changed. Contact your administrator.' then raise; end if;
+ end;
+ perform pg_temp.ok(true,'invitation retry cannot reactivate revoked membership');
+end $$;
+reset role;
+select pg_temp.ok((select not active from public.organization_memberships where organization_id=pg_temp.f('org') and user_id=pg_temp.f('worker')),'revoked membership remains inactive after retry');
 select label from checks;
 rollback;
