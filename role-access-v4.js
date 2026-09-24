@@ -8,6 +8,7 @@ const isWorker=()=>has('worker');
 const isClient=()=>has('client_viewer');
 
 const screenRules={
+  enterpriseOnboarding:['administrator','safety_coordinator'],
   admin:['administrator'],
   team:['administrator'],
   teamInvite:['administrator'],

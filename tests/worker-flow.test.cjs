@@ -319,7 +319,8 @@ test('Client Viewer cannot submit FLRA, and existing Worker/Client Viewer screen
   f.run("db.settings.role='Worker'");f.ctx.safeSitePermissions.refresh();
   assert.equal(f.ctx.safeSitePermissions.canOpen('flra'),true);
   for(const screen of ['admin','team','reports','taskLibrary','taskEditor','qualificationEditor'])assert.equal(f.ctx.safeSitePermissions.canOpen(screen),false);
-  const before=f.run('JSON.stringify(db.tasks)');f.ctx.saveTask();f.ctx.deleteTask();assert.equal(f.run('JSON.stringify(db.tasks)'),before);
+  f.load('cloud-task-editor.js');
+  const before=f.run('JSON.stringify(db.tasks)');await f.ctx.saveTask();await f.ctx.deleteTask();assert.equal(f.run('JSON.stringify(db.tasks)'),before);
   f.load('worker-permissions-fix.js');
   for(const handler of f.listeners.get('load')){if(handler!==f.ctx.restoreSession)handler();}
   assert.equal(f.element('n-reports').style.display,'none');assert.equal(f.element('n-admin').style.display,'none');
