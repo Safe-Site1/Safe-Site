@@ -1,5 +1,21 @@
 # Safe-Site
 
+## Customer project setup
+
+Administrators open Administration to set their Company and Current Project / Site
+name, or enter a New Project / Site Name and choose Add Project. Users select the
+project in the header before completing forms; Work Area / Location is the specific
+place within that project. Names are saved to that customer's organization in
+Supabase, not just the browser. Rename keeps the same site UUID and report links.
+New customer accounts start with My Organization / My First Project, with no
+assumed geographic location. Existing customer projects are not renamed.
+
+Apply `database/customer_projects.sql` (applied as `customer_project_management`).
+The invoker RPC preserves RLS and restricts mutations to administrators, rejects
+blank/duplicate active names, and uses one transaction for company/project changes.
+The form does not change the account's role. `tests/customer-projects-database.sql`
+checks 13 permission, persistence, retry and reference-preservation cases.
+
 ## Pre-shift and risk assessment supervisor review
 
 Workers select an active cloud task, complete the work area, hazards and controls,

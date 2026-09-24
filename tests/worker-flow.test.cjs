@@ -6,6 +6,25 @@ const vm=require('node:vm');
 const root=path.join(__dirname,'..');
 const source=name=>fs.readFileSync(path.join(root,name),'utf8');
 
+test('customer projects require admin and preserve the same create ID after uncertain saves',async()=>{
+ const f=fixture();f.load('customer-projects.js');f.run("cloudUser={id:'admin'}");
+ f.element('newProjectName').value='Customer Project';let calls=[];
+ f.client.rpc=async(name,p)=>{calls.push(p);return {error:{message:'Lost response'}};};
+ await f.ctx.addSite();assert.equal(calls.length,0);
+ f.run("db.settings.role='Administrator'");await f.ctx.addSite();await f.ctx.addSite();
+ assert.equal(calls[0].p_id,calls[1].p_id);assert.equal(calls[0].p_org,'org');assert.equal(f.element('newProjectName').value,'Customer Project');
+ f.client.rpc=async(name,p)=>({data:p.p_id});f.ctx.loadCloudContext=async()=>{throw new Error('Refresh failed');};
+ await f.ctx.addSite();assert.match(f.element('projectSaveStatus').textContent,/Project saved/);assert.equal(f.element('newProjectName').value,'');
+});
+
+test('project rename sends stable site ID and cannot change the role',async()=>{
+ const f=fixture();f.load('customer-projects.js');f.run("cloudUser={id:'admin'};db.settings.role='Administrator'");
+ f.element('currentSiteName').value='Client B & North';f.element('companyName').value='Client B';f.element('currentRole').value='Worker';
+ let payload;f.client.rpc=async(name,p)=>{payload=p;return {data:p.p_id};};f.ctx.loadCloudContext=async()=>{throw new Error('Refresh failed');};
+ await f.ctx.saveAdminSettings();assert.equal(payload.p_id,'site-a');assert.equal(payload.p_name,'Client B & North');assert.equal(payload.p_company,'Client B');assert.equal(f.run('db.settings.role'),'Administrator');
+ assert.equal(f.ctx.escapeProjectName('<East & West>'),'&lt;East &amp; West&gt;');
+});
+
 test('photo uploads validate type, size and signatures and hash identical bytes consistently',async()=>{
   const f=fixture();f.load('record-photos.js');
   const bytes=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64');

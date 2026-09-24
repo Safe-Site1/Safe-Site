@@ -177,11 +177,11 @@ async function ensureCloudTenant(){
   if(existing && existing.length) return;
   const orgId=crypto.randomUUID();
   const siteId=crypto.randomUUID();
-  let r=await client.from('organizations').insert({id:orgId,name:'Safe Site Pilot',slug:'safe-site-pilot-'+user.id.slice(0,8)});
+  let r=await client.from('organizations').insert({id:orgId,name:'My Organization',slug:'safe-site-'+user.id.slice(0,8)});
   if(r.error) throw r.error;
   r=await client.from('organization_memberships').insert({organization_id:orgId,user_id:user.id,role:'administrator'});
   if(r.error) throw r.error;
-  r=await client.from('sites').insert({id:siteId,organization_id:orgId,name:'Timmins Project',location:'Ontario, Canada'});
+  r=await client.from('sites').insert({id:siteId,organization_id:orgId,name:'My First Project'});
   if(r.error) throw r.error;
   r=await client.from('site_memberships').insert({site_id:siteId,user_id:user.id});
   if(r.error) throw r.error;
@@ -471,8 +471,9 @@ function badge(status){
 function pretty(x){ return String(x).replaceAll('_',' ').replace(/\b\w/g,m=>m.toUpperCase()); }
 
 function populateSiteSwitcher(){
-  siteSwitcher.innerHTML=db.sites.map(s=>`<option ${s===db.settings.site?'selected':''}>${s}</option>`).join('');
+  siteSwitcher.innerHTML=db.sites.map(s=>`<option ${s===db.settings.site?'selected':''}>${escapeProjectName(s)}</option>`).join('');
 }
+function escapeProjectName(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 async function switchSite(){
   window.clearFieldDrafts?.();
   cancelNewAction();
@@ -515,7 +516,7 @@ function renderWorkers(){
 }
 function prepWorkerEditor(){
   workerEditorTitle.textContent='Add Worker'; workerName.value='';workerRole.value='';workerId.value='';
-  workerSite.innerHTML=db.sites.map(s=>`<option ${s===db.settings.site?'selected':''}>${s}</option>`).join('');
+  workerSite.innerHTML=db.sites.map(s=>`<option ${s===db.settings.site?'selected':''}>${escapeProjectName(s)}</option>`).join('');
 }
 async function saveWorker(){
   if(!workerName.value.trim()||!workerRole.value.trim()||!workerId.value.trim()){toast('Name, role and employee ID are required');return}
@@ -885,15 +886,10 @@ function downloadBlob(blob,name){const a=document.createElement('a');a.href=URL.
 
 function renderAdmin(){
   companyName.value=db.settings.company;currentSiteName.value=db.settings.site;currentRole.value=db.settings.role;
-  sitesAdmin.innerHTML=db.sites.map(s=>`<div class="item">${s}</div>`).join('');
+  sitesAdmin.innerHTML=db.sites.map(s=>`<div class="item">${escapeProjectName(s)}</div>`).join('');
   usersAdmin.innerHTML=db.users.map(u=>`<div class="item"><b>${u.name}</b><div class="small muted">${u.email} · ${u.role}</div></div>`).join('');
 }
-function saveAdminSettings(){
-  db.settings.company=companyName.value.trim()||db.settings.company;db.settings.role=currentRole.value;
-  const renamed=currentSiteName.value.trim();if(renamed&&renamed!==db.settings.site){const i=db.sites.indexOf(db.settings.site);if(i>=0)db.sites[i]=renamed;db.workers.forEach(w=>{if(w.site===db.settings.site)w.site=renamed});db.records.forEach(r=>{if(r.site===db.settings.site)r.site=renamed});db.actions.forEach(a=>{if(a.site===db.settings.site)a.site=renamed});db.settings.site=renamed;}
-  logAudit('updated','settings',db.settings.company);persist();populateSiteSwitcher();applyPermissions();toast('Settings saved');
-}
-function addSite(){const s=prompt('Site name');if(!s)return;if(!db.sites.includes(s))db.sites.push(s);logAudit('created','site',s);persist();populateSiteSwitcher();renderAdmin();toast('Site added');}
+// Customer project/settings writes are handled by customer-projects.js.
 function inviteUser(){const name=prompt('User name');if(!name)return;const email=prompt('Email');if(!email)return;const role=prompt('Role','Supervisor')||'Supervisor';db.users.push({name,email,role});logAudit('invited','user',email);persist();renderAdmin();toast('User invite added');}
 function importWorkersCSV(){
   const f=csvInput.files[0];if(!f)return;

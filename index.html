@@ -298,13 +298,15 @@ hr{border:0;border-top:1px solid #1f3a46}
       <h1>Administration</h1>
       <div class="card">
         <label>Company<input id="companyName"></label>
-        <label>Current Site<input id="currentSiteName"></label>
+        <label>Current Project / Site<input id="currentSiteName" maxlength="150"></label>
         <label>Your Role<select id="currentRole"><option>Administrator</option><option>Supervisor</option><option>Safety Coordinator</option><option>Worker</option><option>Client Viewer</option></select></label>
         <button class="btn" onclick="saveAdminSettings()">Save Settings</button>
       </div>
-      <div class="section">Sites</div>
+      <div class="section">Projects / Sites</div>
       <div id="sitesAdmin" class="card"></div>
-      <button class="btn secondary" onclick="addSite()">+ Add Site</button>
+      <label>New Project / Site Name<input id="newProjectName" maxlength="150" placeholder="Enter your project name"></label>
+      <button id="addProjectButton" class="btn secondary" onclick="addSite()">Add Project</button>
+      <p id="projectSaveStatus" role="status"></p>
       <div class="section">Users</div>
       <div id="usersAdmin" class="card"></div>
       <button class="btn secondary" onclick="inviteUser()">+ Invite User</button>
@@ -334,10 +336,10 @@ hr{border:0;border-top:1px solid #1f3a46}
 <div id="buildMarker" style="display:none">pilot-polish-rebuild-20260909b</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=20260923h"></script>
+<script src="app.js?v=20260924a"></script>
 <script src="invitation-bootstrap-guard.js?v=20260922a"></script>
   <script src="pilot-management.js?v=20260923i"></script>
-<script src="team-permissions.js?v=20260922a"></script>
+<script src="team-permissions.js?v=20260924a"></script>
   <script src="role-access-v4.js?v=20260912a"></script>
 <script src="action-closeout.js?v=20260923d"></script>
 <script src="worker-pass-documents.js?v=20260909e"></script>
@@ -365,6 +367,7 @@ hr{border:0;border-top:1px solid #1f3a46}
 <script src="client-viewer-pilot-fix.js?v=20260918a"></script>
 <script src="field-submissions.js?v=20260923b"></script>
 <script src="record-photos.js?v=20260923a"></script>
+<script src="customer-projects.js?v=20260924a"></script>
 </body>
 </html>
 

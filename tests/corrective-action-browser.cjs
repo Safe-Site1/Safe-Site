@@ -159,7 +159,21 @@ const root=path.join(__dirname,'..');
     assert.equal(await page.evaluate(()=>storagePhotos.length),1);
     await page.getByRole('button',{name:'View photo 1',exact:true}).click();assert.equal(await page.locator('#recordPhotoPreview img').count(),1);
    }
-   assert.deepEqual(errors,[]);console.log(`PASS: ${role} field, closeout and photo flows`);await page.close();
+   await page.evaluate(()=>{window.projectCalls=[];testClient.rpc=async(name,p)=>{projectCalls.push(p);return {data:p.p_id};};});
+   if(role==='Administrator'){
+    await page.evaluate(()=>{loadCloudContext=async()=>{};loadCloudWorkers=async()=>{};show('admin');});
+    await page.locator('#newProjectName').fill('Customer <North> & East');await page.locator('#addProjectButton').click();
+    await page.waitForFunction(()=>document.getElementById('projectSaveStatus').textContent.includes('Project saved'));
+    assert.equal(await page.evaluate(()=>projectCalls[0].p_name),'Customer <North> & East');
+    assert.equal(await page.locator('#currentSiteName').isEnabled(),true);
+    await page.locator('#currentSiteName').fill('Renamed Customer Project');await page.locator('#companyName').fill('Customer Business');
+    await page.getByRole('button',{name:'Save Settings',exact:true}).click();
+    await page.waitForFunction(()=>projectCalls.length===2);
+    assert.equal(await page.evaluate(()=>projectCalls[1].p_id),'site');assert.equal(await page.locator('#currentRole').isDisabled(),true);
+   }else{
+    await page.evaluate(async()=>{await addSite();await saveAdminSettings();});assert.equal(await page.evaluate(()=>projectCalls.length),0);
+   }
+   assert.deepEqual(errors,[]);console.log(`PASS: ${role} field, closeout, photo and project flows`);await page.close();
   }
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

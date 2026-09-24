@@ -2,6 +2,9 @@
 
 ## Verified
 
+- September 24: customer project creation and rename save to Supabase with administrator authorization and customer isolation. Existing report links survive rename; new accounts no longer default to Timmins/Ontario. Covered by 13 rollback database checks and browser role tests. Production administrator UI has not been exercised with the currently signed-in Supervisor account.
+- September 24: real synthetic PNG uploaded to the labeled Near Miss record and displayed successfully through private photo access. Storage confirms the authenticated Supervisor uploader, PNG type and private bucket.
+
 - Pre-Shift: current cloud templates, required Work Area, pending review, authenticated staff approval and immutable submitted content. Live Worker-to-Supervisor pilot completed.
 - Pre-Task Risk Assessment: cloud templates and site threshold, required Work Area, pending review and authenticated approval. Live labeled pilot completed.
 - Corrective actions: exact record routing with duplicate titles, required closeout note and server-assigned closer/time. Live labeled closeout completed.

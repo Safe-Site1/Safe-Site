@@ -109,16 +109,16 @@ function lockDemoAdminControls(){
 
   ['companyName','currentSiteName'].forEach(id=>{
     const el=document.getElementById(id);
-    if(el) el.disabled=true;
+    if(el) el.disabled=!isAdmin();
   });
 
   [...admin.querySelectorAll('button')].forEach(b=>{
     if(
-      b.textContent.includes('Save Settings') ||
       b.textContent.includes('Add Site') ||
       b.textContent.includes('Reset Demo Data') ||
       b.textContent.includes('Invite User')
     ) b.style.display='none';
+    if(b.textContent.includes('Save Settings')||b.id==='addProjectButton') b.style.display=isAdmin()?'':'none';
   });
 
   const csv=document.getElementById('csvInput');
