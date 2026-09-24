@@ -6,7 +6,8 @@ const root=path.join(__dirname,'..');
  const browser=await chromium.launch({headless:true,...(process.env.BROWSER_EXECUTABLE?{executablePath:process.env.BROWSER_EXECUTABLE}:{})});
  try{
   for(const role of ['Worker','Client Viewer','Supervisor','Administrator','Safety Coordinator']){
-   const page=await browser.newPage(),errors=[];
+   const page=await browser.newPage({viewport:{width:Number(process.env.TEST_VIEWPORT)||1100,height:850}}),errors=[];
+   const checkLayout=async label=>{assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,`${role}: ${label} fits viewport`);};
    page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
    await page.route('**/*',async route=>{
     const url=new URL(route.request().url());
@@ -14,7 +15,7 @@ const root=path.join(__dirname,'..');
     if(url.hostname!=='safe-site.test')return route.abort();
     const file=path.join(root,url.pathname==='/'?'index.html':url.pathname.slice(1));
     if(!file.startsWith(root+path.sep)||!fs.existsSync(file))return route.fulfill({status:404,body:''});
-    return route.fulfill({body:fs.readFileSync(file),contentType:file.endsWith('.js')?'application/javascript':'text/html'});
+    return route.fulfill({body:fs.readFileSync(file),contentType:file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':'text/html'});
    });
    await page.addInitScript(()=>{
     window.actions=[{id:'late',due_date:'2030-01-01',description:'LATE'},{id:'closed',due_date:'2020-01-01',description:'OLD',status:'closed'},
@@ -62,6 +63,7 @@ const root=path.join(__dirname,'..');
     await page.evaluate(()=>show('reports'));assert.equal(await page.locator('#reports').isVisible(),true);
    }else{
     await page.evaluate(()=>show('inspection'));
+    await checkLayout('inspection');
     await page.locator('#inspectionSubmit').click();assert.equal(await page.evaluate(()=>fieldCalls.length),0);
     await page.locator('#inspArea').fill('PILOT TEST ONLY — inspection');
     await page.locator('#inspCond').selectOption('Deficiency Found');
@@ -147,6 +149,7 @@ const root=path.join(__dirname,'..');
     await loadCloudSafetyData();await openRecordDetail('photo-record');
    });
    await page.locator('#recordPhotoList').waitFor();
+   await checkLayout('record details');
    if(role==='Client Viewer'){
     assert.equal(await page.locator('#recordPhotoUpload').count(),0);await page.evaluate(()=>attachRecordPhoto());assert.equal(await page.evaluate(()=>photoUploads),0);
    }else{
@@ -163,6 +166,7 @@ const root=path.join(__dirname,'..');
    if(role==='Administrator'){
     await page.evaluate(()=>{loadCloudContext=async()=>{};loadCloudWorkers=async()=>{};show('admin');});
     await page.locator('#newProjectName').fill('Customer <North> & East');await page.locator('#addProjectButton').click();
+    await checkLayout('administration');
     await page.waitForFunction(()=>document.getElementById('projectSaveStatus').textContent.includes('Project saved'));
     assert.equal(await page.evaluate(()=>projectCalls[0].p_name),'Customer <North> & East');
     assert.equal(await page.locator('#currentSiteName').isEnabled(),true);
@@ -173,7 +177,13 @@ const root=path.join(__dirname,'..');
    }else{
     await page.evaluate(async()=>{await addSite();await saveAdminSettings();});assert.equal(await page.evaluate(()=>projectCalls.length),0);
    }
-   assert.deepEqual(errors,[]);console.log(`PASS: ${role} field, closeout, photo and project flows`);await page.close();
+   if(['Administrator','Safety Coordinator'].includes(role)){
+    await page.evaluate(()=>{window.taskCalls=[];testClient.rpc=async(name,p)=>{taskCalls.push(p);return {data:p.p_id};};newTask();});
+    await page.locator('#editTaskName').fill('Customer project task');await page.locator('#editTaskHazards').fill('Falling material');await page.locator('#editTaskControls').fill('Barricade area');
+    await checkLayout('task editor');await page.getByRole('button',{name:'Save Task',exact:true}).click();
+    await page.waitForFunction(()=>taskCalls.length===1);assert.equal(await page.evaluate(()=>taskCalls[0].p_site),'site');
+   }
+   assert.deepEqual(errors,[]);console.log(`PASS: ${role} field, closeout, photo, project and task flows`);await page.close();
   }
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

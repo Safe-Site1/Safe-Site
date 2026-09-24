@@ -2,6 +2,10 @@
 
 ## Verified
 
+- September 24: task template authoring now saves hazards/controls to Supabase. Versioned edits retain the previous template and its children; archive replaces in-app deletion. Twelve database checks cover authorization, history preservation, retries and stale edits.
+- September 24: phone-width (390 px) browser flows pass for all five roles, with overflow checks on field forms, record details, project administration and task editing. Physical mobile/camera testing remains outstanding.
+- September 24: removed false offline-sync confirmations; reconnecting no longer clears unsent local items or claims they were uploaded. Administration describes actual retry and signature capabilities.
+
 - September 24: customer project creation and rename save to Supabase with administrator authorization and customer isolation. Existing report links survive rename; new accounts no longer default to Timmins/Ontario. Covered by 13 rollback database checks and browser role tests. Production administrator UI has not been exercised with the currently signed-in Supervisor account.
 - September 24: real synthetic PNG uploaded to the labeled Near Miss record and displayed successfully through private photo access. Storage confirms the authenticated Supervisor uploader, PNG type and private bucket.
 

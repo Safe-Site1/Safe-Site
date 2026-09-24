@@ -219,14 +219,14 @@ async function loadCloudTaskTemplates(){
   if(!organizationId||!siteId){taskLoadState='unavailable';refreshTaskForms();return;}
   try{
     const {data,error}=await initSupabase().from('task_templates')
-      .select('id,name,category,task_template_hazards(hazard,sort_order),task_template_controls(control,sort_order)')
+      .select('id,name,category,site_id,version,task_template_hazards(hazard,sort_order),task_template_controls(control,sort_order)')
       .eq('organization_id',organizationId).eq('active',true)
       .or(`site_id.eq.${siteId},site_id.is.null`).order('name');
     if(error)throw error;
     // A slow response from a previous site/session must never replace this site's tasks.
     if(request!==taskLoadSequence||organizationId!==cloudOrganizationId||siteId!==currentCloudSiteId())return;
     const ordered=(rows,key)=>(rows||[]).slice().sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(row=>row[key]);
-    db.tasks=(data||[]).map(t=>({id:t.id,name:t.name,category:t.category||'',
+    db.tasks=(data||[]).map(t=>({id:t.id,name:t.name,category:t.category||'',siteId:t.site_id,version:t.version,
       hazards:ordered(t.task_template_hazards,'hazard'),controls:ordered(t.task_template_controls,'control')}));
     taskContext={organizationId,siteId};
     taskLoadState='ready';
@@ -432,7 +432,7 @@ function logAudit(action,entity,detail=''){
 function saveAndQueue(kind,payload){
   if(!navigator.onLine){
     db.offlineQueue.push({kind,payload,time:nowISO()});
-    toast('Saved offline — will sync when service returns');
+    toast('Stored on this device only. Automatic upload is unavailable.');
   }
   persist();
 }
@@ -441,7 +441,7 @@ function updateConnectivity(){
   syncBadge.textContent=online?(cloudUser?'Cloud':'Online'):'Offline';
   syncBadge.className='badge '+(online?'ok':'warn');
   if(online && db.offlineQueue.length){
-    const count=db.offlineQueue.length; db.offlineQueue=[]; persist(); toast(`${count} offline item${count>1?'s':''} synced`);
+    toast('Connected. Local unsent items still need review; they have not been uploaded.');
   }
 }
 window.addEventListener('online',updateConnectivity);
@@ -578,7 +578,7 @@ function renderTaskLibrary(){
   const q=(taskSearch.value||'').toLowerCase(); taskLibraryList.innerHTML='';
   db.tasks.filter(t=>(t.name+' '+t.category).toLowerCase().includes(q)).forEach(t=>{
     const d=document.createElement('div');d.className='card worker';
-    d.innerHTML=`<div class="row"><div class="grow"><b>${t.name}</b><div class="small muted">${t.category} · ${t.hazards.length} hazards · ${t.controls.length} controls</div></div><span class="badge info">Template</span></div>`;
+    d.innerHTML=`<div class="row"><div class="grow"><b>${escapeProjectName(t.name)}</b><div class="small muted">${escapeProjectName(t.category)} · ${t.hazards.length} hazards · ${t.controls.length} controls</div></div><span class="badge info">Template</span></div>`;
     d.onclick=()=>editTask(t.id);taskLibraryList.appendChild(d);
   });
 }
@@ -588,17 +588,7 @@ function newTask(){
 function editTask(id){
   const t=db.tasks.find(x=>x.id===id); if(!t)return; editingTaskId=id;taskEditorTitle.textContent='Edit Task';editTaskName.value=t.name;editTaskCategory.value=t.category;editTaskHazards.value=t.hazards.join('\n');editTaskControls.value=t.controls.join('\n');deleteTaskBtn.classList.remove('hidden');show('taskEditor');
 }
-function saveTask(){
-  const name=editTaskName.value.trim(); if(!name){toast('Task name is required');return}
-  const obj={name,category:editTaskCategory.value,hazards:editTaskHazards.value.split('\n').map(x=>x.trim()).filter(Boolean),controls:editTaskControls.value.split('\n').map(x=>x.trim()).filter(Boolean)};
-  if(editingTaskId){Object.assign(db.tasks.find(t=>t.id===editingTaskId),obj);logAudit('updated','task template',name)}
-  else{obj.id=crypto.randomUUID();db.tasks.push(obj);logAudit('created','task template',name)}
-  saveAndQueue('task',obj);toast('Task saved');show('taskLibrary');
-}
-function deleteTask(){
-  if(editingTaskId===null)return;if(!confirm('Delete this task template?'))return;
-  const t=db.tasks.find(x=>x.id===editingTaskId);db.tasks=db.tasks.filter(x=>x.id!==editingTaskId);logAudit('deleted','task template',t?.name||'');persist();toast('Task deleted');show('taskLibrary');
-}
+// Task writes use versioned cloud saves and archival in cloud-task-editor.js.
 async function submitFLRA(){
   if(!['Administrator','Supervisor','Safety Coordinator','Worker'].includes(db.settings.role)){
     toast('Your role does not have permission for that action');return;

@@ -6,6 +6,27 @@ const vm=require('node:vm');
 const root=path.join(__dirname,'..');
 const source=name=>fs.readFileSync(path.join(root,name),'utf8');
 
+test('cloud task edits create new versions and retain inputs on save failure',async()=>{
+ const f=fixture();f.load('cloud-task-editor.js');f.run("db.settings.role='Administrator';db.tasks=[{id:'old',siteId:'site-a',version:1,name:'Old',category:'Other',hazards:['H'],controls:['C']}]");
+ f.ctx.editTask('old');f.element('editTaskName').value='Changed';let first,second;
+ f.client.rpc=async(name,p)=>{first=p;return {error:{message:'Offline'}};};await f.ctx.saveTask();
+ assert.notEqual(first.p_id,'old');assert.equal(first.p_previous,'old');assert.equal(first.p_version,1);assert.equal(f.element('editTaskName').value,'Changed');
+ f.client.rpc=async(name,p)=>{second=p;return {data:p.p_id};};f.ctx.loadCloudTaskTemplates=async()=>{};await f.ctx.saveTask();assert.equal(second.p_id,first.p_id);
+});
+
+test('workers, supervisors and viewers cannot edit cloud task templates',async()=>{
+ for(const role of ['Worker','Supervisor','Client Viewer']){
+  const f=fixture();f.load('cloud-task-editor.js');f.run(`db.settings.role=${JSON.stringify(role)}`);let calls=0;f.client.rpc=async()=>{calls++;};
+  f.ctx.newTask();await f.ctx.saveTask();await f.ctx.deleteTask();assert.equal(calls,0);
+ }
+});
+
+test('reconnecting preserves unsent local items and never claims they synced',()=>{
+ const f=fixture();f.run("db.offlineQueue=[{kind:'task',payload:{name:'Unsent'}}]");
+ f.ctx.updateConnectivity();assert.equal(f.run('db.offlineQueue.length'),1);
+ assert.match(f.messages.at(-1),/have not been uploaded/);
+});
+
 test('customer projects require admin and preserve the same create ID after uncertain saves',async()=>{
  const f=fixture();f.load('customer-projects.js');f.run("cloudUser={id:'admin'}");
  f.element('newProjectName').value='Customer Project';let calls=[];

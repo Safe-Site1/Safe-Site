@@ -174,7 +174,7 @@ hr{border:0;border-top:1px solid #1f3a46}
         <label>Standard Hazards<textarea id="editTaskHazards" placeholder="One hazard per line"></textarea></label>
         <label>Standard Controls<textarea id="editTaskControls" placeholder="One control per line"></textarea></label>
         <button class="btn" onclick="saveTask()">Save Task</button>
-        <button id="deleteTaskBtn" class="btn danger" onclick="deleteTask()">Delete Task</button>
+        <button id="deleteTaskBtn" class="btn secondary" onclick="deleteTask()">Archive Task</button>
       </div>
     </section>
 
@@ -317,8 +317,8 @@ hr{border:0;border-top:1px solid #1f3a46}
       </div>
       <div class="section">System</div>
       <div class="card">
-        <div class="item row"><div class="grow"><b>Offline storage</b><div class="small muted">Forms save locally if service is lost.</div></div><span class="badge ok">Enabled</span></div>
-        <div class="item row"><div class="grow"><b>Audit logging</b><div class="small muted">Important record changes are tracked.</div></div><span class="badge ok">Enabled</span></div>
+        <div class="item row"><div class="grow"><b>Submission recovery</b><div class="small muted">Inspection and incident retries survive reloads in this tab. Internet is required to confirm a save. No automatic offline upload queue.</div></div><span class="badge info">Retry supported</span></div>
+        <div class="item row"><div class="grow"><b>Verified signatures</b><div class="small muted">Approvals and action closeouts store the authenticated account and server timestamp. Local activity is not a complete audit history.</div></div><span class="badge info">Cloud records</span></div>
       </div>
       <button class="btn danger" onclick="resetDemo()">Reset Demo Data</button>
     </section>
@@ -336,7 +336,7 @@ hr{border:0;border-top:1px solid #1f3a46}
 <div id="buildMarker" style="display:none">pilot-polish-rebuild-20260909b</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=20260924a"></script>
+<script src="app.js?v=20260924b"></script>
 <script src="invitation-bootstrap-guard.js?v=20260922a"></script>
   <script src="pilot-management.js?v=20260923i"></script>
 <script src="team-permissions.js?v=20260924a"></script>
@@ -368,6 +368,7 @@ hr{border:0;border-top:1px solid #1f3a46}
 <script src="field-submissions.js?v=20260923b"></script>
 <script src="record-photos.js?v=20260923a"></script>
 <script src="customer-projects.js?v=20260924a"></script>
+<script src="cloud-task-editor.js?v=20260924a"></script>
 </body>
 </html>
 

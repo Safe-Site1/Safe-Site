@@ -1,5 +1,21 @@
 # Safe-Site
 
+## Cloud task authoring
+
+Administrators and Safety Coordinators can create project task templates with
+hazards and controls. Apply `database/cloud_task_editor.sql` (applied as
+`history_preserving_cloud_task_editor`). Each edit creates a new template version
+and retires the previous one; old hazards, controls and report snapshots remain
+stored. Archive Task hides a template from new selections without deleting it.
+Shared organization templates remain read-only in this project editor; create a
+project-specific task to customize them. Saved templates load in field forms.
+`tests/cloud-task-editor-database.sql` checks 12 history, permission and retry cases.
+
+Run the browser suite with `TEST_VIEWPORT=390` for phone-width layout and workflow
+checks. These use desktop Chromium emulation, not physical-device certification.
+The app does not claim automatic offline upload: reconnecting preserves legacy
+unsent items and instructs the user to review them.
+
 ## Customer project setup
 
 Administrators open Administration to set their Company and Current Project / Site
