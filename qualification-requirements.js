@@ -189,6 +189,8 @@
     window.SafeSiteQualificationRequirements.requirements = RULES;
 
     renderWorkerRequirements();
+    const workerList=document.getElementById('workers');
+    if(workerList && !workerList.classList.contains('hidden') && typeof renderWorkers==='function') renderWorkers();
     if (window.SafeSiteDashboardCompliance?.refresh) {
       window.SafeSiteDashboardCompliance.refresh();
     }
