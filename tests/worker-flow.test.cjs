@@ -6,6 +6,30 @@ const vm=require('node:vm');
 const root=path.join(__dirname,'..');
 const source=name=>fs.readFileSync(path.join(root,name),'utf8');
 
+test('qualification expiry uses current calendar day, including yesterday, today and 90-day boundary',()=>{
+ const f=fixture();let now='2026-09-25T12:00:00';
+ f.ctx.Date=class extends Date{constructor(...args){super(...(args.length?args:[now]));}};
+ assert.equal(f.ctx.qualificationStatus({expires:'2026-09-24'}),'expired');
+ assert.equal(f.ctx.qualificationStatus({expires:'2026-09-25'}),'expiring');
+ assert.equal(f.ctx.qualificationStatus({expires:'2026-12-24'}),'expiring');
+ assert.equal(f.ctx.qualificationStatus({expires:'2026-12-25'}),'valid');
+ now='2026-09-26T00:01:00';
+ assert.equal(f.ctx.qualificationStatus({expires:'2026-09-25'}),'expired');
+ assert.equal(f.ctx.qualificationStatus({expires:''}),'valid');
+});
+
+test('required training warning boundary survives the autumn daylight-saving change',()=>{
+ const oldTZ=process.env.TZ;process.env.TZ='America/Toronto';
+ try{
+  const f=fixture();f.ctx.Date=class extends Date{constructor(...args){super(...(args.length?args:['2026-10-15T12:00:00']));}};
+  f.load('qualification-requirements.js');
+  const api=f.ctx.SafeSiteQualificationRequirements;
+  api.requirements['DST Site']={Miner:[{qualification_name:'First Aid',warning_days:30}]};
+  const result=api.evaluateWorker({site:'DST Site',role:'Miner',quals:[{name:'First Aid',expires:'2026-11-14'}]});
+  assert.equal(result.requirements[0].days,30);assert.equal(result.requirements[0].status,'expiring');
+ }finally{if(oldTZ===undefined)delete process.env.TZ;else process.env.TZ=oldTZ;}
+});
+
 test('cloud task edits create new versions and retain inputs on save failure',async()=>{
  const f=fixture();f.load('cloud-task-editor.js');f.run("db.settings.role='Administrator';db.tasks=[{id:'old',siteId:'site-a',version:1,name:'Old',category:'Other',hazards:['H'],controls:['C']}]");
  f.ctx.editTask('old');f.element('editTaskName').value='Changed';let first,second;

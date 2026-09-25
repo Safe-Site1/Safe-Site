@@ -447,10 +447,16 @@ function updateConnectivity(){
 window.addEventListener('online',updateConnectivity);
 window.addEventListener('offline',updateConnectivity);
 
+function qualificationDaysUntil(dateString){
+  if(!dateString) return null;
+  const today=new Date(),expiry=new Date(dateString+'T00:00:00');
+  // Compare calendar dates, not elapsed hours across daylight-saving changes.
+  return (Date.UTC(expiry.getFullYear(),expiry.getMonth(),expiry.getDate())-
+    Date.UTC(today.getFullYear(),today.getMonth(),today.getDate()))/86400000;
+}
 function qualificationStatus(q){
   if(!q.expires) return 'valid';
-  const exp=new Date(q.expires+'T23:59:59');
-  const days=Math.ceil((exp-TODAY)/(1000*60*60*24));
+  const days=qualificationDaysUntil(q.expires);
   if(days<0) return 'expired';
   if(days<=90) return 'expiring';
   return 'valid';

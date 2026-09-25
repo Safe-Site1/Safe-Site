@@ -6,10 +6,7 @@ const DAY=86400000;
 const esc=v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;");
 
 function daysToExpiry(q){
-  if(!q?.expires) return null;
-  const now=new Date(); now.setHours(0,0,0,0);
-  const exp=new Date(q.expires+'T00:00:00'); exp.setHours(0,0,0,0);
-  return Math.ceil((exp-now)/DAY);
+  return qualificationDaysUntil(q?.expires);
 }
 
 function expiryBand(q){
