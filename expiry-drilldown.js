@@ -3,7 +3,7 @@
 'use strict';
 const DAY=86400000; let active=null;
 const esc=v=>String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;");
-function days(q){if(!q?.expires)return null;const n=new Date();n.setHours(0,0,0,0);const e=new Date(q.expires+'T00:00:00');e.setHours(0,0,0,0);return Math.ceil((e-n)/DAY);}
+function days(q){return qualificationDaysUntil(q?.expires);}
 function band(q){const d=days(q);if(d===null)return null;if(d<=30)return '30';if(d<=60)return '60';if(d<=90)return '90';return null;}
 function workers(){return typeof currentWorkers==='function'?currentWorkers():(db?.workers||[]).filter(w=>w.site===db?.settings?.site);}
 function rows(){const r=[];workers().forEach(w=>(w.quals||[]).forEach(q=>{const b=band(q);if(b)r.push({w,q,b,d:days(q)});}));return r.sort((a,b)=>a.d-b.d);}

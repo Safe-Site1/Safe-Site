@@ -40,11 +40,7 @@
   }
 
   function daysUntil(dateString) {
-    if (!dateString) return null;
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const expiry = new Date(dateString + 'T00:00:00');
-    return Math.ceil((expiry.getTime() - today.getTime()) / 86400000);
+    return qualificationDaysUntil(dateString);
   }
 
   function getRuleSet(worker) {
