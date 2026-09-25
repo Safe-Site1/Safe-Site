@@ -30,6 +30,16 @@ test('required training warning boundary survives the autumn daylight-saving cha
  }finally{if(oldTZ===undefined)delete process.env.TZ;else process.env.TZ=oldTZ;}
 });
 
+test('worker badges follow required training even when existing qualifications are valid',()=>{
+ const f=fixture(),worker={quals:[{name:'Orientation',expires:''}]};
+ for(const [overall,expected] of [['missing','noncompliant'],['expired','noncompliant'],['expiring','expiring'],['ready','compliant'],['loading','noncompliant']]){
+  f.ctx.SafeSiteQualificationRequirements={evaluateWorker:()=>({overall,requirements:[{}]})};
+  assert.equal(f.ctx.workerStatus(worker),expected);
+ }
+ f.ctx.SafeSiteQualificationRequirements={evaluateWorker:()=>({overall:'unconfigured',requirements:[]})};
+ assert.equal(f.ctx.workerStatus(worker),'compliant');
+});
+
 test('cloud task edits create new versions and retain inputs on save failure',async()=>{
  const f=fixture();f.load('cloud-task-editor.js');f.run("db.settings.role='Administrator';db.tasks=[{id:'old',siteId:'site-a',version:1,name:'Old',category:'Other',hazards:['H'],controls:['C']}]");
  f.ctx.editTask('old');f.element('editTaskName').value='Changed';let first,second;

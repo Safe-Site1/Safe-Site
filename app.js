@@ -462,6 +462,15 @@ function qualificationStatus(q){
   return 'valid';
 }
 function workerStatus(w){
+  const evaluation=window.SafeSiteQualificationRequirements?.evaluateWorker(w);
+  if(evaluation){
+    if(evaluation.overall==='loading') return 'noncompliant';
+    if(evaluation.requirements?.length){
+      if(evaluation.overall==='ready') return 'compliant';
+      if(evaluation.overall==='expiring') return 'expiring';
+      return 'noncompliant';
+    }
+  }
   if(!w.quals || !w.quals.length) return 'noncompliant';
   const sts=w.quals.map(qualificationStatus);
   if(sts.includes('expired')) return 'noncompliant';
