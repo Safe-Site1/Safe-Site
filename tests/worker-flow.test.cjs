@@ -40,6 +40,32 @@ test('worker badges follow required training even when existing qualifications a
  assert.equal(f.ctx.workerStatus(worker),'compliant');
 });
 
+test('cloud audit guards roles and scopes escaped, paginated events to the current project',async()=>{
+ const f=fixture();f.ctx.clearTimeout=()=>{};f.load('audit-permissions-fix.js');
+ let calls=0,filters=[];
+ f.client.from=()=>{calls++;const q={select(){return q;},eq(...v){filters.push(v);return q;},like(){return q;},order(){return q;},limit(){return q;},lt(...v){filters.push(v);return q;},then(resolve){resolve({data:Array.from({length:51},(_,i)=>({id:100-i,user_id:'actor',entity_id:'record',action:'workflow.corrective_action.closed',created_at:'2026-09-25',metadata:{title:'<script>bad</script>',closeout_note:'<img onerror=bad>',status:'closed'}})),error:null});}};return q;};
+ f.run("reportTab='audit';cloudUser={id:'admin'}");
+ for(const role of ['Worker','Supervisor','Client Viewer']){f.run('db.settings.role='+JSON.stringify(role));await f.ctx.SafeSiteCloudAudit.load();}
+ assert.equal(calls,0);
+ f.run("db.settings.role='Administrator'");await f.ctx.SafeSiteCloudAudit.load();
+ assert.deepEqual(filters.slice(0,2),[['organization_id','org'],['metadata->>site_id','site-a']]);
+ assert.match(f.element('reportsBody').innerHTML,/&lt;script&gt;/);
+ assert.doesNotMatch(f.element('reportsBody').innerHTML,/<script>|<img/);
+ assert.equal((f.element('reportsBody').innerHTML.match(/<article/g)||[]).length,50);
+ await f.element('auditOlder').onclick();assert.deepEqual(filters.at(-1),['id','51']);
+});
+
+test('cloud audit ignores late responses after a site switch and offers retry after failure',async()=>{
+ const f=fixture();f.ctx.clearTimeout=()=>{};f.run("reportTab='audit';cloudUser={id:'admin'};db.settings.role='Administrator'");f.load('audit-permissions-fix.js');
+ let resolveRequest;
+ f.client.from=()=>{const q={select(){return q;},eq(){return q;},like(){return q;},order(){return q;},limit(){return q;},then(resolve){resolveRequest=resolve;}};return q;};
+ const pending=f.ctx.SafeSiteCloudAudit.load();await Promise.resolve();await Promise.resolve();
+ f.run("db.settings.site='B'");resolveRequest({data:[{metadata:{title:'OLD PRIVATE EVENT'}}]});await pending;
+ assert.doesNotMatch(f.element('reportsBody').innerHTML,/OLD PRIVATE EVENT/);
+ f.client.from=()=>{throw Error('Offline');};await f.ctx.SafeSiteCloudAudit.load();
+ assert.match(f.element('reportsBody').innerHTML,/Retry/);assert.match(f.element('reportsBody').innerHTML,/Offline/);
+});
+
 test('cloud task edits create new versions and retain inputs on save failure',async()=>{
  const f=fixture();f.load('cloud-task-editor.js');f.run("db.settings.role='Administrator';db.tasks=[{id:'old',siteId:'site-a',version:1,name:'Old',category:'Other',hazards:['H'],controls:['C']}]");
  f.ctx.editTask('old');f.element('editTaskName').value='Changed';let first,second;

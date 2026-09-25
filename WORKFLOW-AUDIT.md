@@ -10,7 +10,13 @@ The functions use SECURITY INVOKER in the private schema, with direct execution 
 
 ## History boundary
 
-Only future events are captured. Earlier rehearsal records retain their source-level signatures and notes, but no historical events are fabricated or backdated. This change does not add an audit viewer or audit unrelated workflows such as training edits and account administration.
+Only future events are captured. Earlier rehearsal records retain their source-level signatures and notes, but no historical events are fabricated or backdated. Unrelated workflows such as training edits and account administration are outside this event stream.
+
+## Viewing events
+
+Administrators and Safety Coordinators can open Reports → Audit. The screen reads the selected project's cloud workflow events, newest first, in pages of 50. It displays account and record IDs, server time, status transition, source-report link ID and closeout note where available. Refresh/newest and retry controls are provided. It does not display browser-local activity as verified history or retain fetched audit data in local storage.
+
+The frontend checks the current role, authenticated account, organization and site, and discards late responses after context changes. Database RLS remains the access authority. Tests cover forbidden roles, project filters, HTML escaping, pagination, stale responses and error recovery; the complete JavaScript suite passes 69 tests.
 
 Privileged maintenance must deliberately account for immutable workflow audit rows, including account/organization removal that would otherwise cascade into audit history.
 
