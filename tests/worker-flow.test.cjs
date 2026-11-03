@@ -78,6 +78,25 @@ test('opening Audit refreshes project totals after a submission without opening 
  assert.doesNotMatch(f.element('reportsBody').innerHTML,/No audit activity/);
 });
 
+test('Worker to Administrator switch restores passport controls without reload and keeps other roles restricted',()=>{
+ const f=fixture(),hidden=new Map();
+ for(const id of ['workerSearch','addWorkerBtn','addQualBtn','uploadDocBox']){
+  f.element(id).classList.toggle=(name,on)=>hidden.set(id,on);
+ }
+ const heading={textContent:''},back={textContent:''};
+ f.element('workers').querySelector=()=>heading;
+ f.element('workerDetail').querySelector=()=>back;
+ f.load('role-access-v4.js');
+ for(const role of ['Worker','Administrator','Supervisor','Safety Coordinator','Worker','Client Viewer']){
+  f.run('db.settings.role='+JSON.stringify(role));f.ctx.safeSitePermissions.refresh();
+  assert.equal(hidden.get('uploadDocBox'),role==='Worker');
+  assert.equal(f.element('uploadDocBox').style.display,['Administrator','Safety Coordinator'].includes(role)?'':'none');
+  assert.equal(heading.textContent,role==='Worker'?'My Passport':'Workers');
+  assert.equal(back.textContent,role==='Worker'?'‹ Back to My Passport':'‹ Back');
+  assert.equal(f.element('n-admin').style.display,role==='Administrator'?'':'none');
+ }
+});
+
 test('cloud task edits create new versions and retain inputs on save failure',async()=>{
  const f=fixture();f.load('cloud-task-editor.js');f.run("db.settings.role='Administrator';db.tasks=[{id:'old',siteId:'site-a',version:1,name:'Old',category:'Other',hazards:['H'],controls:['C']}]");
  f.ctx.editTask('old');f.element('editTaskName').value='Changed';let first,second;
@@ -235,7 +254,7 @@ function fixture({storage=new Map(),session=new Map(),url='https://safe-site.tes
   const element=id=>{
     if(!elements.has(id))elements.set(id,{id,value:'',style:{},textContent:'',className:'',
       classList:{add(){},remove(){},toggle(){},contains(){return false;}},
-      focus(){this.focused=true;},querySelectorAll(){return [];},appendChild(){},
+      focus(){this.focused=true;},querySelector(){return null;},querySelectorAll(){return [];},appendChild(){},
       set innerHTML(html){this.html=html;if(/Task$/.test(id))this.value=html.match(/<option value="([^"]*)"/)?.[1]||'';},
       get innerHTML(){return this.html||'';}});
     return elements.get(id);
