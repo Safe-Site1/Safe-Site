@@ -66,6 +66,18 @@ test('cloud audit ignores late responses after a site switch and offers retry af
  assert.match(f.element('reportsBody').innerHTML,/Retry/);assert.match(f.element('reportsBody').innerHTML,/Offline/);
 });
 
+test('opening Audit refreshes project totals after a submission without opening Records',async()=>{
+ const f=fixture();f.ctx.clearTimeout=()=>{};
+ f.run("reportTab='audit';cloudUser={id:'admin'};db.settings.role='Administrator';db.records=[{site:'A'},{site:'B'}];db.actions=[{site:'A',status:'open'},{site:'A',status:'closed'}];");
+ f.load('audit-permissions-fix.js');
+ f.client.from=()=>{throw Error('Offline');};
+ await f.ctx.renderReports();assert.equal(f.element('rRecords').textContent,1);
+ f.run("db.records.push({site:'A'});");
+ await f.ctx.renderReports();assert.equal(f.element('rRecords').textContent,2);
+ assert.equal(f.element('rActions').textContent,1);
+ assert.doesNotMatch(f.element('reportsBody').innerHTML,/No audit activity/);
+});
+
 test('cloud task edits create new versions and retain inputs on save failure',async()=>{
  const f=fixture();f.load('cloud-task-editor.js');f.run("db.settings.role='Administrator';db.tasks=[{id:'old',siteId:'site-a',version:1,name:'Old',category:'Other',hazards:['H'],controls:['C']}]");
  f.ctx.editTask('old');f.element('editTaskName').value='Changed';let first,second;
