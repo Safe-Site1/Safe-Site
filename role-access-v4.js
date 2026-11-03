@@ -69,6 +69,22 @@ function addRoleBanner(){
 function applyRoleUI(){
   addRoleBanner();
 
+  // Worker passport presentation adds CSS classes as well as inline visibility.
+  // Recompute both after account changes; inline display alone cannot undo .hidden.
+  const workerOnly=isWorker();
+  ['workerSearch','addWorkerBtn','addQualBtn','uploadDocBox'].forEach(id=>{
+    document.getElementById(id)?.classList.toggle('hidden',workerOnly);
+  });
+  const workforceNav=document.getElementById('n-workers');
+  if(workforceNav) workforceNav.innerHTML=workerOnly?'<span>👤</span>My Passport':'<span>👥</span>Workers';
+  const workforceTitle=document.getElementById('workers')?.querySelector('h1');
+  if(workforceTitle) workforceTitle.textContent=workerOnly?'My Passport':'Workers';
+  const passportBack=document.getElementById('workerDetail')?.querySelector('.back');
+  if(passportBack) passportBack.textContent=workerOnly?'‹ Back to My Passport':'‹ Back';
+  setVisible('n-reports',!workerOnly);
+  setVisible('dashboardManage',isStaff());
+  setVisible('trainingExpiryIntel',isStaff());
+
   // Admin-only company/team controls.
   setVisible('n-admin',isAdmin());
   document.querySelectorAll('.adminOnly').forEach(el=>el.style.display=isAdmin()?'':'none');
