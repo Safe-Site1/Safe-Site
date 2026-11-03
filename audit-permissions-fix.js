@@ -50,6 +50,7 @@ const base=window.renderReports;
 window.renderReports=function(){
  permissions();
  if(reportTab!=='audit'){generation++;return base.apply(this,arguments);}
+ renderReportSummary();
  const filters=document.getElementById('pilotReportFilters');if(filters)filters.style.display='none';
  return load();
 };

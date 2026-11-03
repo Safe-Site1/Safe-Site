@@ -869,11 +869,14 @@ function canManageCorrectiveActions(){
 function setReportTab(tab,btn){
   reportTab=tab;document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderReports();
 }
-function renderReports(){
+function renderReportSummary(){
   const workers=currentWorkers();const ready=workers.filter(w=>workerStatus(w)==='compliant').length;
   rWorkers.textContent=workers.length;rCompliance.textContent=(workers.length?Math.round(ready/workers.length*100):0)+'%';
   rRecords.textContent=db.records.filter(r=>r.site===db.settings.site).length;
   rActions.textContent=db.actions.filter(a=>a.site===db.settings.site&&a.status!=='closed').length;
+}
+function renderReports(){
+  renderReportSummary();
   if(reportTab==='records') reportsBody.innerHTML=db.records.filter(r=>r.site===db.settings.site).slice().reverse().map(r=>`<div class="item"><b>${r.type}: ${r.title}</b><div class="small muted">${new Date(r.time).toLocaleString()}</div></div>`).join('')||'<div class="muted">No records.</div>';
   if(reportTab==='actions') reportsBody.innerHTML=db.actions.filter(a=>a.site===db.settings.site).map(a=>`<div class="item"><b>${a.description}</b><div class="small muted">${a.owner} · ${a.due} · ${pretty(a.status)}</div></div>`).join('')||'<div class="muted">No actions.</div>';
   if(reportTab==='audit') reportsBody.innerHTML=db.audit.filter(a=>a.site===db.settings.site).slice(0,50).map(a=>`<div class="item"><b>${pretty(a.action)} ${a.entity}</b><div class="small muted">${a.detail} · ${new Date(a.time).toLocaleString()}</div></div>`).join('')||'<div class="muted">No audit activity.</div>';
